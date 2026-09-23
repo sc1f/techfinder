@@ -45,6 +45,11 @@ final class CameraController: @unchecked Sendable {
 
     /// Asks for permission if needed, then configures and starts the session.
     func start() async {
+        #if targetEnvironment(simulator)
+        // No real camera in the Simulator; skip the permission prompt and show the simulated scene.
+        await MainActor.run { self.status = .unavailable }
+        return
+        #else
         switch AVCaptureDevice.authorizationStatus(for: .video) {
         case .authorized:
             break
@@ -70,6 +75,7 @@ final class CameraController: @unchecked Sendable {
                 if isRunning { self.status = .running }
             }
         }
+        #endif
     }
 
     func stop() {
@@ -150,13 +156,7 @@ final class CameraController: @unchecked Sendable {
     }
 
     private func configure() {
-        #if targetEnvironment(simulator)
-        // Recent Simulators expose a placeholder camera that fails on start; use the simulated scene instead.
-        let camera: AVCaptureDevice? = nil
-        #else
-        let camera = Self.bestBackCamera()
-        #endif
-        guard let device = camera else {
+        guard let device = Self.bestBackCamera() else {
             DispatchQueue.main.async { self.status = .unavailable }
             return
         }

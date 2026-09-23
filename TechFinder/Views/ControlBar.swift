@@ -1,8 +1,7 @@
 import SwiftUI
 import TechFinderCore
 
-/// Bottom controls: format, the lens strip for one-tap lens changes, and the lens library.
-/// Press and hold any of them for a tip.
+/// The bottom control: a lens carousel, or an Add Lens button when the library is empty.
 struct ControlBar: View {
     @Environment(LibraryStore.self) private var library
     @Binding var sheet: ViewfinderView.Sheet?
@@ -10,24 +9,20 @@ struct ControlBar: View {
     let rotation: Angle
 
     var body: some View {
-        let format = library.selectedFormat
-
-        // Separate glass pieces rather than one merged container, so the lens strip's lifted selection
-        // lens isn't absorbed into the strip behind it.
-        HStack(spacing: 10) {
-            RoundGlassControl(systemImage: "rectangle.dashed", rotation: rotation,
-                              tip: HoldTip(title: "Format", detail: "\(format.name) · \(format.dimensionsLabel)"),
-                              shownTip: $tip) {
-                sheet = .formats
+        if library.lenses.isEmpty {
+            Button {
+                sheet = .newLens
+            } label: {
+                Label("Add Lens", systemImage: "plus")
+                    .font(.subheadline.weight(.semibold))
+                    .padding(.horizontal, 20)
+                    .frame(height: 48)
+                    .contentShape(Capsule())
             }
-            // The strip hugs its lenses and sits centred in the space between the buttons.
-            LensStrip(sheet: $sheet, tip: $tip, rotation: rotation)
-                .frame(maxWidth: .infinity)
-            RoundGlassControl(systemImage: "camera.aperture", rotation: rotation,
-                              tip: HoldTip(title: "Lenses", detail: "Add, edit and choose lenses"),
-                              shownTip: $tip) {
-                sheet = .lenses
-            }
+            .buttonStyle(.plain)
+            .glassSurface(Capsule(), interactive: true)
+        } else {
+            LensCarousel(tip: $tip, rotation: rotation)
         }
     }
 }
@@ -56,132 +51,99 @@ struct RoundGlassControl: View {
     }
 }
 
-/// Saved lenses labelled by focal length, wide to long. Sized to its lenses; scrolls only when they don't fit.
+/// Saved lenses, wide to long, with the selected lens always in the centre, like the Camera app's
+/// mode switcher.
 ///
-/// Works like a segmented control: a thumb slides behind the selected lens, and dragging along the strip
-/// selects the lens under the finger while the thumb lifts into a glass lens. When the strip scrolls,
-/// horizontal swipes scroll it and dragging starts from the selected lens instead.
-private struct LensStrip: View {
+/// Tap a lens to bring it to the centre. Drag to slide the row: the lens under the centre is selected as
+/// it passes, and on release the row snaps to the nearest lens (a flick carries on). While dragging, the
+/// centre highlight lifts into a clear glass lens over the labels.
+private struct LensCarousel: View {
     @Environment(LibraryStore.self) private var library
-    @Binding var sheet: ViewfinderView.Sheet?
     @Binding var tip: HoldTip?
     let rotation: Angle
 
-    @Namespace private var thumbNamespace
-    @State private var chipFrames: [Lens.ID: CGRect] = [:]
-    /// Decided when a drag starts and reset by SwiftUI however the drag ends.
-    @GestureState private var drag: DragMode = .idle
+    @State private var itemFrames: [Lens.ID: CGRect] = [:]
+    /// Centre of the selected lens when the drag began; the row is laid out from it while dragging so
+    /// live selection changes don't move it.
+    @State private var dragAnchor: CGFloat?
+    @State private var dragOffset: CGFloat = 0
 
-    private enum DragMode { case idle, selecting, ignoring }
-    private var isDragging: Bool { drag == .selecting }
+    private static let space = "LensCarousel"
+    private let height: CGFloat = 48
+    private let settle = Animation.spring(response: 0.35, dampingFraction: 0.85)
 
-    private static let space = "LensStrip"
+    private var isDragging: Bool { dragAnchor != nil }
 
     var body: some View {
-        Group {
-            if library.lenses.isEmpty {
-                Button {
-                    sheet = .newLens
-                } label: {
-                    Label("Add Lens", systemImage: "plus")
-                        .font(.subheadline.weight(.semibold))
-                        .padding(.horizontal, 18)
-                        .frame(height: 48)
-                        .contentShape(Capsule())
-                }
-                .buttonStyle(.plain)
-            } else {
-                ViewThatFits(in: .horizontal) {
-                    chips(dragsFromAnywhere: true)
-                        .fixedSize()
-                    ScrollViewReader { proxy in
-                        ScrollView(.horizontal, showsIndicators: false) {
-                            chips(dragsFromAnywhere: false)
-                        }
-                        .scrollDisabled(isDragging)
-                        .scrollBounceBehavior(.basedOnSize, axes: .horizontal)
-                        // Fade chips out at the ends so an overflowing strip reads as scrollable.
-                        .mask {
-                            LinearGradient(stops: [.init(color: .clear, location: 0), .init(color: .black, location: 0.08),
-                                                   .init(color: .black, location: 0.92), .init(color: .clear, location: 1)],
-                                           startPoint: .leading, endPoint: .trailing)
-                        }
-                        .onAppear {
-                            if let id = library.selectedLensID {
-                                proxy.scrollTo(id, anchor: .center)
-                            }
-                        }
-                        .onChange(of: library.selectedLensID) { _, id in
-                            // Don't move the content under a dragging finger.
-                            guard let id, !isDragging else { return }
-                            withAnimation(.smooth) { proxy.scrollTo(id, anchor: .center) }
-                        }
-                        .onChange(of: isDragging) { _, dragging in
-                            guard !dragging, let id = library.selectedLensID else { return }
-                            withAnimation(.smooth) { proxy.scrollTo(id, anchor: .center) }
-                        }
+        GeometryReader { geometry in
+            let width = geometry.size.width
+            let selectedFrame = library.selectedLensID.flatMap { itemFrames[$0] }
+            let anchor = dragAnchor ?? selectedFrame?.midX ?? width / 2
+            let thumbWidth = selectedFrame?.width ?? 56
+
+            ZStack {
+                // Resting highlight, behind the labels.
+                Capsule()
+                    .fill(.white.opacity(0.16))
+                    .frame(width: thumbWidth, height: 40)
+                    .opacity(isDragging ? 0 : 1)
+
+                items
+                    .frame(width: width, height: height, alignment: .leading)
+                    .offset(x: width / 2 - anchor + dragOffset)
+                    .mask {
+                        // Fade lenses out towards the ends of the track.
+                        LinearGradient(stops: [.init(color: .clear, location: 0), .init(color: .black, location: 0.12),
+                                               .init(color: .black, location: 0.88), .init(color: .clear, location: 1)],
+                                       startPoint: .leading, endPoint: .trailing)
                     }
-                }
+
+                // Lifted glass lens, over the labels while dragging.
+                Capsule()
+                    .fill(.white.opacity(0.04))
+                    .glassLens(Capsule(), isActive: isDragging)
+                    .frame(width: thumbWidth + 10, height: 44)
+                    .scaleEffect(isDragging ? 1.08 : 0.9)
+                    .opacity(isDragging ? 1 : 0)
+                    .allowsHitTesting(false)
             }
+            .frame(width: width, height: height)
+            .animation(.spring(response: 0.25, dampingFraction: 0.75), value: isDragging)
+            .animation(.smooth(duration: 0.2), value: thumbWidth)
         }
-        .frame(height: 48)
+        .frame(height: height)
         .clipShape(Capsule())
         .glassSurface(Capsule(), interactive: true)
-        .animation(.smooth, value: library.lenses.count)
+        .contentShape(Capsule())
+        .simultaneousGesture(slide)
+        .accessibilityElement(children: .contain)
+        .accessibilityAdjustableAction { direction in
+            step(direction == .increment ? 1 : -1)
+        }
     }
 
-    private func chips(dragsFromAnywhere: Bool) -> some View {
+    private var items: some View {
         let format = library.selectedFormat
-        return HStack(spacing: 2) {
+        return HStack(spacing: 4) {
             ForEach(library.lenses) { lens in
                 let fov = FieldOfView(focalLength: lens.focalLength, format: format)
-                let isSelected = lens.id == library.selectedLensID
-                chip(for: lens, isSelected: isSelected,
-                     tip: HoldTip(title: lens.displayName, detail: "\(fov.anglesLabel) · \(fov.equivalentLabel)"))
-                    .id(lens.id)
+                item(for: lens, tip: HoldTip(title: lens.displayName, detail: "\(fov.anglesLabel) · \(fov.equivalentLabel)"))
                     .onGeometryChange(for: CGRect.self) { $0.frame(in: .named(Self.space)) } action: { frame in
-                        chipFrames[lens.id] = frame
+                        itemFrames[lens.id] = frame
                     }
             }
         }
-        .padding(.horizontal, 4)
+        .fixedSize()
         .coordinateSpace(.named(Self.space))
-        .simultaneousGesture(selectionDrag(startsAnywhere: dragsFromAnywhere))
-        .animation(.spring(response: 0.3, dampingFraction: 0.78), value: library.selectedLensID)
-        .animation(.spring(response: 0.25, dampingFraction: 0.7), value: isDragging)
     }
 
-    /// Selects the lens nearest the finger as it moves along the strip. When the strip scrolls, only a
-    /// drag that starts on the selected lens selects; other drags are left to the scroll view.
-    private func selectionDrag(startsAnywhere: Bool) -> some Gesture {
-        DragGesture(minimumDistance: 4, coordinateSpace: .named(Self.space))
-            .updating($drag) { value, mode, _ in
-                guard mode == .idle else { return }
-                let onSelection = library.selectedLensID
-                    .flatMap { chipFrames[$0] }
-                    .map { $0.insetBy(dx: -6, dy: -6).contains(value.startLocation) } ?? false
-                mode = startsAnywhere || onSelection ? .selecting : .ignoring
-            }
-            .onChanged { value in
-                guard drag == .selecting,
-                      let id = lens(nearestTo: value.location.x), id != library.selectedLensID else { return }
-                library.selectedLensID = id
-            }
-    }
-
-    private func lens(nearestTo x: CGFloat) -> Lens.ID? {
-        library.lenses
-            .compactMap { lens in chipFrames[lens.id].map { (lens.id, abs($0.midX - x)) } }
-            .min { $0.1 < $1.1 }?
-            .0
-    }
-
-    private func chip(for lens: Lens, isSelected: Bool, tip lensTip: HoldTip) -> some View {
-        // Turned sideways, "65mm" would be taller than the chip, so only the number turns.
+    private func item(for lens: Lens, tip lensTip: HoldTip) -> some View {
+        let isSelected = lens.id == library.selectedLensID
+        // Turned sideways, "65mm" would be taller than the track, so only the number turns.
         let isTurned = rotation != .zero
 
         return HoldTipControl(tip: lensTip, shownTip: $tip) {
-            library.selectedLensID = lens.id
+            withAnimation(settle) { library.selectedLensID = lens.id }
         } label: {
             HStack(alignment: .firstTextBaseline, spacing: 1) {
                 Text(lens.focalLengthLabel)
@@ -197,28 +159,62 @@ private struct LensStrip: View {
             .animation(.smooth, value: rotation)
             .foregroundStyle(isSelected ? Color.accentColor : .white)
             .padding(.horizontal, 12)
-            .frame(minWidth: 44)
+            .frame(minWidth: 56)
             .frame(height: 40)
-            .background {
-                if isSelected {
-                    SelectionThumb(isLifted: isDragging)
-                        .matchedGeometryEffect(id: "thumb", in: thumbNamespace)
-                }
-            }
         }
         .accessibilityAddTraits(isSelected ? .isSelected : [])
     }
-}
 
-/// The pill behind the selected lens. At rest it's a soft highlight; while dragging it lifts and turns
-/// into clear glass.
-private struct SelectionThumb: View {
-    let isLifted: Bool
+    // MARK: - Sliding
 
-    var body: some View {
-        Capsule()
-            .fill(.white.opacity(isLifted ? 0.05 : 0.16))
-            .glassLens(Capsule(), isActive: isLifted)
-            .scaleEffect(isLifted ? 1.12 : 1)
+    private var slide: some Gesture {
+        DragGesture(minimumDistance: 5)
+            .onChanged { value in
+                let anchor = dragAnchor ?? currentCenter
+                dragAnchor = anchor
+                let position = rubberBanded(anchor - value.translation.width)
+                dragOffset = anchor - position
+                if let id = lens(nearestTo: position), id != library.selectedLensID {
+                    library.selectedLensID = id
+                }
+            }
+            .onEnded { value in
+                guard let anchor = dragAnchor else { return }
+                let target = lens(nearestTo: clamped(anchor - value.predictedEndTranslation.width))
+                withAnimation(settle) {
+                    if let target { library.selectedLensID = target }
+                    dragAnchor = nil
+                    dragOffset = 0
+                }
+            }
+    }
+
+    private var centers: [(id: Lens.ID, x: CGFloat)] {
+        library.lenses.compactMap { lens in itemFrames[lens.id].map { (lens.id, $0.midX) } }
+    }
+
+    private var currentCenter: CGFloat {
+        library.selectedLensID.flatMap { itemFrames[$0]?.midX } ?? 0
+    }
+
+    private func lens(nearestTo x: CGFloat) -> Lens.ID? {
+        centers.min { abs($0.x - x) < abs($1.x - x) }?.id
+    }
+
+    private func clamped(_ x: CGFloat) -> CGFloat {
+        guard let first = centers.first?.x, let last = centers.last?.x else { return x }
+        return min(max(x, first), last)
+    }
+
+    /// Lets the row travel a little past the first and last lens with resistance.
+    private func rubberBanded(_ x: CGFloat) -> CGFloat {
+        let limit = clamped(x)
+        return limit + (x - limit) * 0.3
+    }
+
+    private func step(_ delta: Int) {
+        guard let index = library.lenses.firstIndex(where: { $0.id == library.selectedLensID }) else { return }
+        let next = min(max(index + delta, 0), library.lenses.count - 1)
+        withAnimation(settle) { library.selectedLensID = library.lenses[next].id }
     }
 }

@@ -22,9 +22,14 @@ final class CameraController: @unchecked Sendable {
 
     private(set) var status: Status = .idle
     private(set) var optics: CameraOptics = .simulated
+    /// A small blurred copy of the live image for the backdrop behind the controls.
+    private(set) var backdrop: CGImage?
 
     let session = AVCaptureSession()
     private let queue = DispatchQueue(label: "TechFinder.camera")
+    private let backdropOutput = AVCaptureVideoDataOutput()
+    private let backdropRenderer = BackdropRenderer()
+    private let backdropQueue = DispatchQueue(label: "TechFinder.backdrop", qos: .utility)
     @ObservationIgnored private var device: AVCaptureDevice?
     @ObservationIgnored private var isConfigured = false
     /// Last zoom asked for; applied once the device exists if it was requested earlier.
@@ -167,6 +172,16 @@ final class CameraController: @unchecked Sendable {
         } catch {
             DispatchQueue.main.async { self.status = .failed(error.localizedDescription) }
             return
+        }
+
+        // Frames for the blurred backdrop. Optional: without it the controls sit on black.
+        backdropOutput.alwaysDiscardsLateVideoFrames = true
+        backdropOutput.setSampleBufferDelegate(backdropRenderer, queue: backdropQueue)
+        backdropRenderer.onImage = { [weak self] image in
+            self?.backdrop = image
+        }
+        if session.canAddOutput(backdropOutput) {
+            session.addOutput(backdropOutput)
         }
 
         self.device = device

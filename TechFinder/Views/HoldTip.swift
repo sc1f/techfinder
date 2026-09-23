@@ -2,8 +2,12 @@ import SwiftUI
 
 /// A short explanation shown while a control is pressed and held.
 struct HoldTip: Equatable {
+    enum Placement { case top, bottom }
+
     var title: String
     var detail: String?
+    /// Where the bubble appears: under the top bar or above the lens carousel.
+    var placement: Placement = .bottom
 }
 
 /// A control that runs `action` on tap and shows `tip` on a long press, instead of a context menu.

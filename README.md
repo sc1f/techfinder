@@ -9,8 +9,12 @@ A minimal iPhone viewfinder for technical-camera photographers. Choose a lens an
 - **Live framing.** The phone camera zooms so the taking frame fills about 85% of the view, and the scene around it is darkened. Pinch to show more or less of the surroundings. Tap the image to focus and meter there. An optional rule-of-thirds grid sits inside the frame.
 - **Lens library.** Add, edit and delete lenses (focal length plus optional name). The list is sorted wide to long, and the angles of view shown are for the current format.
 - **Formats.** Digital backs are grouped by sensor size with their models listed (53.4 × 40, 53.7 × 40.4, 44 × 33, 45 × 30, 36 × 24). Film covers medium format (6×4.5 to 6×17) and large format (4×5, 5×7, 8×10). You can add custom formats.
-- **Tips.** Press and hold a lens chip to see its name and angles, or hold any button to see what it does.
-- **Readout.** Long × short angle of view and the full-frame-equivalent focal length. The frame turns orange when the setup is wider than the iPhone's ultra-wide can see.
+- **Controls.**
+  - The top bar has two glass buttons: tap the lens name to manage lenses, or the format to change it.
+  - The lens carousel at the bottom keeps the selected lens centred. Tap a lens, or drag to slide the row and snap to the lens under the centre.
+  - Press and hold any control or lens for a tip.
+- **Glass backdrop.** A blurred copy of the live camera image fills the space around the viewfinder, so the Liquid Glass controls have something to refract.
+- **Readout.** The lens button shows the long × short angle of view and the full-frame-equivalent focal length. When the setup is wider than the iPhone's ultra-wide can see, the frame turns orange and the button adds a warning line.
 - **Orientation.** The frame's long side runs along the phone's long side: hold the phone in landscape for a landscape frame. The interface stays portrait like the Camera app. Icons and lens labels rotate, even with Rotation Lock on, and in landscape the readout moves to the side edge that is currently up.
 - **Liquid Glass.** Controls use `glassEffect` / `GlassEffectContainer` when built with the iOS 26+ SDK (Xcode 26+). Older SDKs fall back to a blurred material (see `TechFinder/Support/Glass.swift`).
 - **Simulator.** The Simulator has no camera, so the app shows a synthetic scene with lines every 10°. Use it to check that the frame edges land at the lens's angle of view.

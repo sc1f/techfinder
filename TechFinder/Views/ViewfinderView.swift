@@ -37,6 +37,8 @@ struct ViewfinderView: View {
         let isSimulated = camera.status == .unavailable
 
         ZStack {
+            Backdrop(camera: camera, zoom: solution?.zoom ?? 1)
+
             GeometryReader { geometry in
                 let imageRect = Self.imageRect(in: geometry.size, aspectRatio: camera.optics.aspectRatio)
 
@@ -59,15 +61,19 @@ struct ViewfinderView: View {
                 }
                 .position(x: imageRect.midX, y: imageRect.midY)
             }
-            .background(.black)
             .ignoresSafeArea()
             .gesture(pinchToAdjustFill)
 
             VStack(spacing: 0) {
                 topBar(solution: solution, isSimulated: isSimulated)
                     .padding(.top, 8)
+                if let tip, tip.placement == .top {
+                    HoldTipBubble(tip: tip)
+                        .padding(.top, 12)
+                        .transition(.opacity.combined(with: .scale(scale: 0.9, anchor: .top)))
+                }
                 Spacer()
-                if let tip {
+                if let tip, tip.placement == .bottom {
                     HoldTipBubble(tip: tip)
                         .rotationEffect(orientation.rotation)
                         .padding(.bottom, orientation.isLandscape ? 60 : 12)
@@ -138,17 +144,18 @@ struct ViewfinderView: View {
 
     // MARK: - Top bar
 
-    /// Readout centred between a spacer and the grid toggle, so it stays centred on screen.
+    /// Lens and format buttons, with the grid toggle at the trailing edge.
     private func topBar(solution: FramingSolution?, isSimulated: Bool) -> some View {
-        HStack(spacing: 10) {
-            Color.clear.frame(width: 40, height: 40)
-            StatusReadout(lens: library.selectedLens, format: library.selectedFormat,
-                          solution: solution, isSimulated: isSimulated)
+        HStack(alignment: .top, spacing: 8) {
+            SetupButtons(lens: library.selectedLens, format: library.selectedFormat, solution: solution,
+                         isSimulated: isSimulated, sheet: $sheet, tip: $tip)
                 .frame(maxWidth: .infinity)
                 .opacity(orientation.isLandscape ? 0 : 1)
+                .allowsHitTesting(!orientation.isLandscape)
             RoundGlassControl(systemImage: "grid", rotation: orientation.rotation,
-                              tip: HoldTip(title: "Grid", detail: "Rule of thirds inside the frame · \(showsGrid ? "On" : "Off")"),
-                              shownTip: $tip, size: 40, isOn: showsGrid) {
+                              tip: HoldTip(title: "Grid", detail: "Rule of thirds inside the frame · \(showsGrid ? "On" : "Off")",
+                                           placement: .top),
+                              shownTip: $tip, size: 46, isOn: showsGrid) {
                 showsGrid.toggle()
             }
         }
@@ -256,9 +263,89 @@ private struct FocusSquare: View {
     }
 }
 
-// MARK: - Status readout
+// MARK: - Setup buttons
 
-/// Discreet glass pill: lens and format, and the angle of view the frame represents.
+/// The lens and the format as two glass buttons: tap to change them, press and hold for a tip.
+/// When the setup is wider than the phone can see, the lens button adds a warning line.
+private struct SetupButtons: View {
+    let lens: Lens?
+    let format: CaptureFormat
+    let solution: FramingSolution?
+    let isSimulated: Bool
+    @Binding var sheet: ViewfinderView.Sheet?
+    @Binding var tip: HoldTip?
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 6) {
+            HoldTipControl(tip: HoldTip(title: "Lenses", detail: "Tap to add, edit and choose lenses", placement: .top),
+                           shownTip: $tip) {
+                sheet = lens == nil ? .newLens : .lenses
+            } label: {
+                LensReadout(lens: lens, format: format, solution: solution, isSimulated: isSimulated)
+                    .padding(.horizontal, 16)
+                    .frame(minHeight: 46)
+            }
+            .glassSurface(RoundedRectangle(cornerRadius: 23, style: .continuous), interactive: true)
+
+            HoldTipControl(tip: HoldTip(title: "Format", detail: "Tap to choose the back or film format", placement: .top),
+                           shownTip: $tip) {
+                sheet = .formats
+            } label: {
+                VStack(spacing: 1) {
+                    Text(format.name)
+                        .font(.footnote.weight(.semibold))
+                    Text("Format")
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                }
+                .lineLimit(1)
+                .padding(.horizontal, 16)
+                .frame(minHeight: 46)
+            }
+            .glassSurface(Capsule(), interactive: true)
+        }
+        .fixedSize(horizontal: false, vertical: true)
+    }
+}
+
+/// Lens name, its angle of view on the format, and a warning when the phone can't see that wide.
+private struct LensReadout: View {
+    let lens: Lens?
+    let format: CaptureFormat
+    let solution: FramingSolution?
+    let isSimulated: Bool
+    /// The heading line; the landscape readout replaces it with lens and format together.
+    var title: String?
+
+    var body: some View {
+        VStack(spacing: 1) {
+            if let lens {
+                let fov = FieldOfView(focalLength: lens.focalLength, format: format)
+                Text(title ?? lens.displayName)
+                    .font(.footnote.weight(.semibold))
+                Text("\(fov.anglesLabel) · \(fov.equivalentLabel)\(isSimulated ? " · Simulated" : "")")
+                    .font(.caption2.monospacedDigit())
+                    .foregroundStyle(.secondary)
+                if solution?.isClipped == true {
+                    Text("Wider than the iPhone can see")
+                        .font(.caption2.weight(.medium))
+                        .foregroundStyle(.orange)
+                }
+            } else {
+                Text("Add a lens")
+                    .font(.footnote.weight(.semibold))
+            }
+        }
+        .lineLimit(1)
+        .multilineTextAlignment(.center)
+        .padding(.vertical, 6)
+        .contentTransition(.numericText())
+        .animation(.smooth, value: lens)
+        .animation(.smooth, value: format)
+    }
+}
+
+/// The landscape readout along the screen edge: lens, format and angles.
 private struct StatusReadout: View {
     let lens: Lens?
     let format: CaptureFormat
@@ -266,35 +353,43 @@ private struct StatusReadout: View {
     let isSimulated: Bool
 
     var body: some View {
-        VStack(spacing: 2) {
-            if let lens {
-                let fov = FieldOfView(focalLength: lens.focalLength, format: format)
-                Text("\(lens.displayName) · \(format.name)")
-                    .font(.footnote.weight(.semibold))
-                    .lineLimit(1)
-                Group {
-                    if solution?.isClipped == true {
-                        Text("Wider than the iPhone can see · \(fov.anglesLabel)")
-                            .foregroundStyle(.orange)
-                    } else {
-                        Text("\(fov.anglesLabel) · \(fov.equivalentLabel)\(isSimulated ? " · Simulated" : "")")
-                            .foregroundStyle(.secondary)
-                    }
-                }
-                .font(.caption2.monospacedDigit())
-                .lineLimit(1)
-            } else {
-                Text("Add a lens to start framing")
-                    .font(.footnote.weight(.semibold))
-            }
-        }
-        .padding(.horizontal, 14)
-        .padding(.vertical, 7)
-        .glassSurface(Capsule())
-        .contentTransition(.numericText())
-        .animation(.smooth, value: lens)
-        .animation(.smooth, value: format)
+        LensReadout(lens: lens, format: format, solution: solution, isSimulated: isSimulated,
+                    title: lens.map { "\($0.displayName) · \(format.name)" })
+        .padding(.horizontal, 16)
+        .padding(.vertical, 2)
+        .glassSurface(RoundedRectangle(cornerRadius: 22, style: .continuous))
         .accessibilityElement(children: .combine)
+    }
+}
+
+// MARK: - Backdrop
+
+/// A blurred, darkened copy of the live image filling the screen behind everything, so the glass
+/// controls have light and colour to refract instead of flat black.
+private struct Backdrop: View {
+    let camera: CameraController
+    let zoom: Double
+
+    var body: some View {
+        Color.black
+            .overlay {
+                if camera.status == .unavailable {
+                    SimulatedScene(optics: camera.optics, zoom: zoom)
+                        .scaleEffect(1.7)
+                        .blur(radius: 24)
+                } else if let image = camera.backdrop {
+                    Image(decorative: image, scale: 1)
+                        .resizable()
+                        .interpolation(.medium)
+                        .aspectRatio(contentMode: .fill)
+                        .transition(.opacity)
+                }
+            }
+            .overlay(Color.black.opacity(0.4))
+            .clipped()
+            .ignoresSafeArea()
+            .allowsHitTesting(false)
+            .animation(.easeIn(duration: 0.4), value: camera.backdrop == nil)
     }
 }
 

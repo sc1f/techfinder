@@ -35,11 +35,9 @@ Packages/TechFinderCore/     models, format catalog, framing math, persistence, 
 - Run the tests with ⌘U, or `xcodebuild test -scheme TechFinder -destination 'platform=iOS Simulator,name=iPhone 16 Pro'`.
 - Check the core logic without Xcode: `cd Packages/TechFinderCore && swift run CoreCheck`.
 
-Currently built with Xcode 16.2 (iOS 18 SDK, material fallback). Building with Xcode 26 or later turns on Liquid Glass with no code changes; that needs macOS 15.6 or later.
+## CI & TestFlight
 
-## Liquid Glass builds with GitHub Actions
-
-`.github/workflows/ios.yml` builds with the latest Xcode on a macOS 26 runner, so Liquid Glass is compiled in even though your Mac stays on an older macOS.
+`.github/workflows/ios.yml` runs on a macOS 26 runner with the latest stable Xcode.
 
 - **Every push and pull request:** builds and runs the tests on an iPhone Simulator.
 - **TestFlight:** runs from *Actions › iOS › Run workflow*, or when you push a tag such as `v0.1.0`. It archives, signs, and uploads to TestFlight. The build number is the workflow run number.
@@ -53,7 +51,7 @@ One-time setup for TestFlight (requires the paid Apple Developer Program):
    - `ASC_KEY_ID`
    - `ASC_ISSUER_ID`
    - `ASC_KEY_P8`: paste the entire `.p8` file, including the BEGIN/END lines
-4. Run the workflow. When processing finishes, install the build from the TestFlight app on your iPhone. You'll see Liquid Glass on iOS 26 or later.
+4. Run the workflow. When processing finishes, install the build from the TestFlight app on your iPhone.
 
 ## Later
 

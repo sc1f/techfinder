@@ -22,8 +22,77 @@ struct ControlBar: View {
             .buttonStyle(.plain)
             .glassSurface(Capsule(), interactive: true)
         } else {
-            LensCarousel(tip: $tip, rotation: rotation)
+            // Apple's segmented control, with its Liquid Glass lens, when the lenses fit; the sliding
+            // carousel when there are more than fit.
+            ViewThatFits(in: .horizontal) {
+                NativeLensPicker(rotation: rotation)
+                LensCarousel(tip: $tip, rotation: rotation)
+            }
         }
+    }
+}
+
+/// The system segmented control on a glass capsule, like the Photos app's bottom bar. On iOS 26 the
+/// selection lifts into a clear glass lens while pressed or dragged.
+private struct NativeLensPicker: View {
+    @Environment(LibraryStore.self) private var library
+    let rotation: Angle
+
+    private var selection: Binding<Lens.ID?> {
+        Binding(get: { library.selectedLensID }, set: { library.selectedLensID = $0 })
+    }
+
+    var body: some View {
+        Picker("Lens", selection: selection) {
+            ForEach(library.lenses) { lens in
+                label(for: lens)
+                    .accessibilityLabel(lens.displayName)
+                    .tag(Optional(lens.id))
+            }
+        }
+        .pickerStyle(.segmented)
+        .controlSize(.large)
+        .fixedSize()
+        .padding(4)
+        .glassSurface(Capsule())
+        .frame(maxWidth: .infinity)
+    }
+
+    @ViewBuilder
+    private func label(for lens: Lens) -> some View {
+        if rotation == .zero {
+            Text("\(lens.focalLengthLabel)mm")
+        } else {
+            // Segments only show plain text or images, so turned labels are drawn as images.
+            Image(uiImage: TurnedLabel.image(lens.focalLengthLabel, angle: rotation))
+        }
+    }
+}
+
+/// Renders a short label as a template image turned by a quarter turn, for segmented control segments.
+enum TurnedLabel {
+    static func image(_ text: String, angle: Angle) -> UIImage {
+        let font = UIFont.systemFont(ofSize: 15, weight: .semibold).withMonospacedDigits()
+        let attributed = NSAttributedString(string: text, attributes: [.font: font, .foregroundColor: UIColor.black])
+        let textSize = attributed.size()
+        let size = CGSize(width: ceil(textSize.height), height: ceil(textSize.width))
+        let image = UIGraphicsImageRenderer(size: size).image { context in
+            let cg = context.cgContext
+            cg.translateBy(x: size.width / 2, y: size.height / 2)
+            cg.rotate(by: angle.radians)
+            attributed.draw(at: CGPoint(x: -textSize.width / 2, y: -textSize.height / 2))
+        }
+        return image.withRenderingMode(.alwaysTemplate)
+    }
+}
+
+private extension UIFont {
+    func withMonospacedDigits() -> UIFont {
+        let descriptor = fontDescriptor.addingAttributes([
+            .featureSettings: [[UIFontDescriptor.FeatureKey.type: kNumberSpacingType,
+                                UIFontDescriptor.FeatureKey.selector: kMonospacedNumbersSelector]],
+        ])
+        return UIFont(descriptor: descriptor, size: pointSize)
     }
 }
 

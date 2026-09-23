@@ -1,37 +1,65 @@
+import CoreMotion
 import Observation
 import SwiftUI
-import UIKit
 
-/// Tracks how the phone is held. The interface stays portrait like the Camera app; only icons turn.
+/// Tracks how the phone is physically held. The interface stays portrait like the Camera app; icons and
+/// labels turn to stay upright.
+///
+/// Reads gravity from Core Motion rather than `UIDevice.orientation`, which stops updating while the
+/// user has Rotation Lock on.
 @Observable
 final class DeviceOrientation {
-    private(set) var iconRotation: Angle = .zero
+    enum Hold: Equatable {
+        case portrait
+        /// Top of the phone pointing left; the viewer's "up" is the screen's right edge.
+        case landscapeLeft
+        /// Top of the phone pointing right; the viewer's "up" is the screen's left edge.
+        case landscapeRight
+    }
 
-    @ObservationIgnored private var observer: NSObjectProtocol?
+    private(set) var hold: Hold = .portrait
+
+    /// Rotation that keeps content upright for the viewer.
+    var rotation: Angle {
+        switch hold {
+        case .portrait: .zero
+        case .landscapeLeft: .degrees(90)
+        case .landscapeRight: .degrees(-90)
+        }
+    }
+
+    var isLandscape: Bool { hold != .portrait }
+
+    @ObservationIgnored private let motion = CMMotionManager()
 
     init() {
-        UIDevice.current.beginGeneratingDeviceOrientationNotifications()
-        observer = NotificationCenter.default.addObserver(
-            forName: UIDevice.orientationDidChangeNotification, object: nil, queue: .main
-        ) { [weak self] _ in
-            self?.update()
+        guard motion.isDeviceMotionAvailable else { return }
+        motion.deviceMotionUpdateInterval = 0.1
+        motion.startDeviceMotionUpdates(to: .main) { [weak self] data, _ in
+            guard let self, let gravity = data?.gravity else { return }
+            self.update(x: gravity.x, y: gravity.y, z: gravity.z)
         }
-        update()
     }
 
     deinit {
-        if let observer {
-            NotificationCenter.default.removeObserver(observer)
-        }
-        UIDevice.current.endGeneratingDeviceOrientationNotifications()
+        motion.stopDeviceMotionUpdates()
     }
 
-    private func update() {
-        switch UIDevice.current.orientation {
-        case .portrait: iconRotation = .zero
-        case .landscapeLeft: iconRotation = .degrees(90)
-        case .landscapeRight: iconRotation = .degrees(-90)
-        default: break // Face up, face down and upside down keep the last rotation.
+    private func update(x: Double, y: Double, z: Double) {
+        // Lying flat: keep the last orientation, as the Camera app does.
+        guard abs(z) < 0.8 else { return }
+        // Require a clear winner so the icons don't flicker around 45°.
+        let margin = 0.25
+        let next: Hold
+        if abs(x) > abs(y) + margin {
+            next = x < 0 ? .landscapeLeft : .landscapeRight
+        } else if y < 0, abs(y) > abs(x) + margin {
+            next = .portrait
+        } else {
+            return // Upside down or ambiguous.
+        }
+        if next != hold {
+            hold = next
         }
     }
 }

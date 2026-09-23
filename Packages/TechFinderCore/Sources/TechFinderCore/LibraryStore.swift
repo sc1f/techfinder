@@ -22,7 +22,7 @@ public final class LibraryStore {
             lenses = snapshot.lenses.sorted(by: Self.lensOrder)
             customFormats = snapshot.customFormats
             selectedLensID = snapshot.selectedLensID
-            selectedFormatID = snapshot.selectedFormatID
+            selectedFormatID = FormatCatalog.legacyFormatIDs[snapshot.selectedFormatID] ?? snapshot.selectedFormatID
         } else {
             lenses = FormatCatalog.starterLenses.sorted(by: Self.lensOrder)
             selectedLensID = lenses.first(where: { $0.focalLength == 50 })?.id ?? lenses.first?.id

@@ -27,14 +27,17 @@ public struct CaptureFormat: Identifiable, Codable, Hashable, Sendable {
     /// Short side of the image area in millimetres.
     public private(set) var shortSide: Double
     public var category: Category
+    /// Cameras and backs that share this image area, e.g. "Hasselblad CFV 100C".
+    public var models: [String]?
 
     /// Width and height may be given in either order; they are stored as long and short side.
-    public init(id: String, name: String, width: Double, height: Double, category: Category) {
+    public init(id: String, name: String, width: Double, height: Double, category: Category, models: [String]? = nil) {
         self.id = id
         self.name = name
         self.longSide = max(width, height)
         self.shortSide = min(width, height)
         self.category = category
+        self.models = models
     }
 
     public static func custom(name: String, width: Double, height: Double) -> CaptureFormat {
@@ -53,6 +56,12 @@ public struct CaptureFormat: Identifiable, Codable, Hashable, Sendable {
 
     /// Long side divided by short side, e.g. 1.335 for 53.4 × 40.0.
     public var aspectRatio: Double { longSide / shortSide }
+
+    /// "Hasselblad CFV 100C, CFV II 50C, Fujifilm GFX", or nil when no models are listed.
+    public var modelsLabel: String? {
+        guard let models, !models.isEmpty else { return nil }
+        return models.joined(separator: ", ")
+    }
 
     /// "53.4 × 40 mm"
     public var dimensionsLabel: String {

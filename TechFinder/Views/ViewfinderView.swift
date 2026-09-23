@@ -2,19 +2,28 @@ import SwiftUI
 import TechFinderCore
 
 /// The main screen: the live camera image with the taking frame, a status readout on top and
-/// the lens bar below. Pinch to show more or less of the scene around the frame; double-tap to reset.
+/// the lens bar below. Tap the image to focus and meter; pinch to show more or less of the scene
+/// around the frame; press and hold a control for a tip.
 struct ViewfinderView: View {
     @Environment(LibraryStore.self) private var library
     @Environment(\.scenePhase) private var scenePhase
     @State private var camera = CameraController()
     @State private var orientation = DeviceOrientation()
     @State private var sheet: Sheet?
+    @State private var tip: HoldTip?
+    @State private var focusMarker: FocusMarker?
     @AppStorage("frameFill") private var fill = Framing.defaultFill
+    @AppStorage("showsGrid") private var showsGrid = false
     @State private var pinchStartFill: Double?
 
     enum Sheet: String, Identifiable {
         case lenses, formats, newLens
         var id: String { rawValue }
+    }
+
+    private struct FocusMarker: Equatable {
+        let id = UUID()
+        let location: CGPoint
     }
 
     private var solution: FramingSolution? {
@@ -25,6 +34,7 @@ struct ViewfinderView: View {
 
     var body: some View {
         let solution = self.solution
+        let isSimulated = camera.status == .unavailable
 
         ZStack {
             GeometryReader { geometry in
@@ -33,36 +43,62 @@ struct ViewfinderView: View {
                 ZStack {
                     imageLayer(zoom: solution?.zoom ?? 1)
                     if let solution {
-                        FrameOverlay(solution: solution)
+                        FrameOverlay(solution: solution, showsGrid: showsGrid)
+                    }
+                    if let focusMarker {
+                        FocusSquare()
+                            .position(focusMarker.location)
+                            .id(focusMarker.id)
+                            .transition(.opacity)
                     }
                 }
                 .frame(width: imageRect.width, height: imageRect.height)
+                .contentShape(Rectangle())
+                .onTapGesture { location in
+                    focus(at: location, in: imageRect.size)
+                }
                 .position(x: imageRect.midX, y: imageRect.midY)
             }
             .background(.black)
             .ignoresSafeArea()
-            .contentShape(Rectangle())
             .gesture(pinchToAdjustFill)
-            .onTapGesture(count: 2) {
-                withAnimation(.smooth) { fill = Framing.defaultFill }
-            }
 
             VStack(spacing: 0) {
-                StatusReadout(lens: library.selectedLens, format: library.selectedFormat,
-                              solution: solution, isSimulated: camera.status == .unavailable)
+                topBar(solution: solution, isSimulated: isSimulated)
                     .padding(.top, 8)
                 Spacer()
-                ControlBar(sheet: $sheet, iconRotation: orientation.iconRotation)
+                if let tip {
+                    HoldTipBubble(tip: tip)
+                        .rotationEffect(orientation.rotation)
+                        .padding(.bottom, orientation.isLandscape ? 60 : 12)
+                        .transition(.opacity.combined(with: .scale(scale: 0.9, anchor: .bottom)))
+                }
+                ControlBar(sheet: $sheet, tip: $tip, rotation: orientation.rotation)
                     .padding(.bottom, 8)
             }
             .padding(.horizontal, 16)
 
+            sideReadout(solution: solution, isSimulated: isSimulated)
+
             permissionMessage
         }
+        .animation(.smooth(duration: 0.2), value: tip)
+        .animation(.smooth, value: orientation.hold)
         .statusBarHidden()
         .persistentSystemOverlays(.hidden)
         .onChange(of: solution?.zoom ?? 1, initial: true) { _, zoom in
             camera.setZoom(zoom)
+            focusMarker = nil
+        }
+        .task(id: tip) {
+            guard tip != nil else { return }
+            try? await Task.sleep(for: .seconds(2))
+            tip = nil
+        }
+        .task(id: focusMarker) {
+            guard focusMarker != nil else { return }
+            try? await Task.sleep(for: .seconds(1.5))
+            withAnimation(.easeOut(duration: 0.4)) { focusMarker = nil }
         }
         .task {
             await camera.start()
@@ -85,6 +121,7 @@ struct ViewfinderView: View {
         }
         .sensoryFeedback(.selection, trigger: library.selectedLensID)
         .sensoryFeedback(.selection, trigger: library.selectedFormatID)
+        .sensoryFeedback(trigger: tip) { _, new in new == nil ? nil : .impact(weight: .light) }
         .sheet(item: $sheet) { sheet in
             switch sheet {
             case .lenses:
@@ -96,6 +133,42 @@ struct ViewfinderView: View {
             case .newLens:
                 LensEditorView(item: .new())
             }
+        }
+    }
+
+    // MARK: - Top bar
+
+    /// Readout centred between a spacer and the grid toggle, so it stays centred on screen.
+    private func topBar(solution: FramingSolution?, isSimulated: Bool) -> some View {
+        HStack(spacing: 10) {
+            Color.clear.frame(width: 40, height: 40)
+            StatusReadout(lens: library.selectedLens, format: library.selectedFormat,
+                          solution: solution, isSimulated: isSimulated)
+                .frame(maxWidth: .infinity)
+                .opacity(orientation.isLandscape ? 0 : 1)
+            RoundGlassControl(systemImage: "grid", rotation: orientation.rotation,
+                              tip: HoldTip(title: "Grid", detail: "Rule of thirds inside the frame · \(showsGrid ? "On" : "Off")"),
+                              shownTip: $tip, size: 40, isOn: showsGrid) {
+                showsGrid.toggle()
+            }
+        }
+    }
+
+    /// In landscape the readout runs along whichever screen edge is currently "up" for the viewer.
+    @ViewBuilder
+    private func sideReadout(solution: FramingSolution?, isSimulated: Bool) -> some View {
+        if orientation.isLandscape {
+            GeometryReader { geometry in
+                let inset: CGFloat = 12 + 22 // edge margin + half the pill's height
+                let x = orientation.hold == .landscapeLeft ? geometry.size.width - inset : inset
+                StatusReadout(lens: library.selectedLens, format: library.selectedFormat,
+                              solution: solution, isSimulated: isSimulated)
+                    .fixedSize()
+                    .rotationEffect(orientation.rotation)
+                    .position(x: x, y: geometry.size.height / 2)
+            }
+            .allowsHitTesting(false)
+            .transition(.opacity)
         }
     }
 
@@ -121,6 +194,17 @@ struct ViewfinderView: View {
         }
         return CGRect(x: (container.width - size.width) / 2, y: (container.height - size.height) / 2,
                       width: size.width, height: size.height)
+    }
+
+    /// Converts a tap on the upright preview into sensor coordinates and focuses and meters there.
+    private func focus(at location: CGPoint, in size: CGSize) {
+        guard size.width > 0, size.height > 0 else { return }
+        // The preview is the landscape sensor image turned 90° clockwise.
+        let devicePoint = CGPoint(x: location.y / size.height, y: 1 - location.x / size.width)
+        camera.focusAndMeter(at: devicePoint)
+        withAnimation(.smooth(duration: 0.2)) {
+            focusMarker = FocusMarker(location: location)
+        }
     }
 
     private var pinchToAdjustFill: some Gesture {
@@ -153,6 +237,22 @@ struct ViewfinderView: View {
         default:
             EmptyView()
         }
+    }
+}
+
+/// Camera-app style focus square that settles into place where the user tapped.
+private struct FocusSquare: View {
+    @State private var settled = false
+
+    var body: some View {
+        Rectangle()
+            .stroke(Color.accentColor, lineWidth: 1.5)
+            .frame(width: 72, height: 72)
+            .scaleEffect(settled ? 1 : 1.35)
+            .onAppear {
+                withAnimation(.smooth(duration: 0.25)) { settled = true }
+            }
+            .allowsHitTesting(false)
     }
 }
 

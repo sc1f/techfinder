@@ -27,7 +27,7 @@ struct LensLibraryView: View {
                     ContentUnavailableView {
                         Label("No Lenses", systemImage: "camera.aperture")
                     } description: {
-                        Text("Add the lenses you shoot with to frame through them.")
+                        Text("Add the lenses you shoot with.")
                     } actions: {
                         Button("Add Lens") { editor = .new() }
                     }

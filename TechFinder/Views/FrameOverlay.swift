@@ -6,6 +6,7 @@ import TechFinderCore
 /// The view fills the camera image rect. The frame's long side runs along the image's long (vertical) axis.
 struct FrameOverlay: View {
     let solution: FramingSolution
+    var showsGrid = false
 
     var body: some View {
         let short = solution.shortFraction
@@ -15,6 +16,11 @@ struct FrameOverlay: View {
         ZStack {
             FrameShape(part: .surround, shortFraction: short, longFraction: long)
                 .fill(.black.opacity(0.55), style: FillStyle(eoFill: true))
+            if showsGrid {
+                FrameShape(part: .thirds, shortFraction: short, longFraction: long)
+                    .stroke(.white.opacity(0.4), lineWidth: 0.5)
+                    .transition(.opacity)
+            }
             FrameShape(part: .border, shortFraction: short, longFraction: long)
                 .stroke(accent.opacity(0.85), lineWidth: 1)
             FrameShape(part: .corners, shortFraction: short, longFraction: long)
@@ -24,13 +30,14 @@ struct FrameOverlay: View {
         }
         .clipped()
         .allowsHitTesting(false)
-        .animation(.smooth(duration: 0.3), value: solution)
+        .animation(.smooth(duration: 0.25), value: solution)
+        .animation(.smooth(duration: 0.2), value: showsGrid)
     }
 }
 
 /// One layer of the frame drawing. The frame size animates between lenses and formats.
 private struct FrameShape: Shape {
-    enum Part { case surround, border, corners, centerMark }
+    enum Part { case surround, border, corners, centerMark, thirds }
 
     let part: Part
     var shortFraction: Double
@@ -67,6 +74,16 @@ private struct FrameShape: Shape {
                 path.move(to: CGPoint(x: corner.x, y: corner.y + dy * arm))
                 path.addLine(to: corner)
                 path.addLine(to: CGPoint(x: corner.x + dx * arm, y: corner.y))
+            }
+
+        case .thirds:
+            for fraction in [1.0 / 3.0, 2.0 / 3.0] {
+                let x = frame.minX + frame.width * fraction
+                let y = frame.minY + frame.height * fraction
+                path.move(to: CGPoint(x: x, y: frame.minY))
+                path.addLine(to: CGPoint(x: x, y: frame.maxY))
+                path.move(to: CGPoint(x: frame.minX, y: y))
+                path.addLine(to: CGPoint(x: frame.maxX, y: y))
             }
 
         case .centerMark:

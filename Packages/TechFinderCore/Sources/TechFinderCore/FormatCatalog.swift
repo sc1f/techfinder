@@ -4,17 +4,15 @@ import Foundation
 /// so photographers who need exact numbers can add a custom format.
 public enum FormatCatalog {
     public static let presets: [CaptureFormat] = [
-        // Digital backs
-        CaptureFormat(id: "phaseone-iq4-150", name: "Phase One IQ4 150MP", width: 53.4, height: 40.0, category: .digitalBack),
-        CaptureFormat(id: "phaseone-iq3-100", name: "Phase One IQ3 100MP", width: 53.7, height: 40.4, category: .digitalBack),
-        CaptureFormat(id: "phaseone-iq-80", name: "Phase One IQ 80MP", width: 53.7, height: 40.4, category: .digitalBack),
-        CaptureFormat(id: "phaseone-iq-60", name: "Phase One IQ 60MP", width: 53.9, height: 40.4, category: .digitalBack),
-        CaptureFormat(id: "phaseone-iq-50", name: "Phase One IQ 50MP", width: 43.9, height: 32.9, category: .digitalBack),
-        CaptureFormat(id: "hasselblad-cfv-100c", name: "Hasselblad CFV 100C", width: 43.8, height: 32.9, category: .digitalBack),
-        CaptureFormat(id: "hasselblad-cfv-50c", name: "Hasselblad CFV II 50C", width: 43.8, height: 32.9, category: .digitalBack),
-        CaptureFormat(id: "fujifilm-gfx", name: "Fujifilm GFX", width: 43.8, height: 32.9, category: .digitalBack),
-        CaptureFormat(id: "leica-s", name: "Leica S", width: 45.0, height: 30.0, category: .digitalBack),
-        CaptureFormat(id: "full-frame", name: "Full Frame (35mm digital)", width: 36.0, height: 24.0, category: .digitalBack),
+        // Digital backs, grouped by sensor size
+        CaptureFormat(id: "digital-53.4x40", name: "53.4 × 40", width: 53.4, height: 40.0, category: .digitalBack,
+                      models: ["Phase One IQ4 150MP", "IQ4 150MP Achromatic"]),
+        CaptureFormat(id: "digital-53.7x40.4", name: "53.7 × 40.4", width: 53.7, height: 40.4, category: .digitalBack,
+                      models: ["Phase One IQ3 100MP", "IQ 80MP", "IQ 60MP (53.9 × 40.4)", "Leaf Credo 80"]),
+        CaptureFormat(id: "digital-44x33", name: "44 × 33", width: 43.8, height: 32.9, category: .digitalBack,
+                      models: ["Hasselblad CFV 100C", "CFV II 50C", "Fujifilm GFX", "Phase One IQ 50MP"]),
+        CaptureFormat(id: "digital-45x30", name: "45 × 30", width: 45.0, height: 30.0, category: .digitalBack,
+                      models: ["Leica S"]),
 
         // Medium format film
         CaptureFormat(id: "film-645", name: "6×4.5", width: 56.0, height: 41.5, category: .mediumFormatFilm),
@@ -31,14 +29,30 @@ public enum FormatCatalog {
         CaptureFormat(id: "film-8x10", name: "8×10 in", width: 245.0, height: 194.0, category: .largeFormatFilm),
 
         // Small format
-        CaptureFormat(id: "film-135", name: "35mm Film", width: 36.0, height: 24.0, category: .smallFormat),
+        CaptureFormat(id: "36x24", name: "36 × 24", width: 36.0, height: 24.0, category: .smallFormat,
+                      models: ["Full-frame digital", "35mm film"]),
     ]
 
-    public static let defaultFormatID = "phaseone-iq4-150"
+    public static let defaultFormatID = "digital-53.4x40"
 
     public static var defaultFormat: CaptureFormat {
         presets.first { $0.id == defaultFormatID }!
     }
+
+    /// Preset ids from before digital backs were grouped by sensor size, mapped to their group.
+    public static let legacyFormatIDs: [String: String] = [
+        "phaseone-iq4-150": "digital-53.4x40",
+        "phaseone-iq3-100": "digital-53.7x40.4",
+        "phaseone-iq-80": "digital-53.7x40.4",
+        "phaseone-iq-60": "digital-53.7x40.4",
+        "phaseone-iq-50": "digital-44x33",
+        "hasselblad-cfv-100c": "digital-44x33",
+        "hasselblad-cfv-50c": "digital-44x33",
+        "fujifilm-gfx": "digital-44x33",
+        "leica-s": "digital-45x30",
+        "full-frame": "36x24",
+        "film-135": "36x24",
+    ]
 
     /// A starting kit for first launch, typical of a digital technical camera.
     public static let starterLenses: [Lens] = [

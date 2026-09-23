@@ -79,9 +79,10 @@ struct FormatPickerView: View {
             HStack {
                 VStack(alignment: .leading, spacing: 2) {
                     Text(format.name)
-                    Text(format.dimensionsLabel)
+                    Text([format.dimensionsLabel, format.modelsLabel].compactMap { $0 }.joined(separator: " · "))
                         .font(.caption.monospacedDigit())
                         .foregroundStyle(.secondary)
+                        .lineLimit(2)
                 }
                 Spacer(minLength: 0)
                 if format.id == library.selectedFormatID {

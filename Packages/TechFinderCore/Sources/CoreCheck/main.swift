@@ -60,6 +60,13 @@ reloaded.deleteFormat(id: custom.id)
 check(reloaded.selectedFormat.id == FormatCatalog.defaultFormatID, "format fallback")
 check(Lens(name: " ", focalLength: 23.5).displayName == "23.5 mm", "display name fallback")
 
+let legacyURL = FileManager.default.temporaryDirectory.appendingPathComponent("tf-legacy-\(UUID().uuidString).json")
+defer { try? FileManager.default.removeItem(at: legacyURL) }
+try! Data(#"{"version":1,"lenses":[],"customFormats":[],"selectedFormatID":"hasselblad-cfv-100c"}"#.utf8).write(to: legacyURL)
+check(LibraryStore(fileURL: legacyURL).selectedFormat.id == "digital-44x33", "legacy format id migrates")
+check(Set(FormatCatalog.presets.map(\.id)).count == FormatCatalog.presets.count, "preset ids unique")
+check(FormatCatalog.legacyFormatIDs.values.allSatisfy { id in FormatCatalog.presets.contains { $0.id == id } }, "legacy ids map to presets")
+
 print(String(format: "Sample: 32mm on IQ4 → zoom %.2fx, frame %.0f%% × %.0f%%, %@, %@",
              s32.zoom, s32.longFraction * 100, s32.shortFraction * 100,
              FieldOfView(focalLength: 32, format: iq4).anglesLabel, FieldOfView(focalLength: 32, format: iq4).equivalentLabel))

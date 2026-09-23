@@ -92,6 +92,14 @@ final class LibraryStoreTests: XCTestCase {
         XCTAssertEqual(store.selectedLens?.focalLength, 70)
     }
 
+    func testLegacyFormatSelectionMovesToSizeGroup() throws {
+        let json = #"{"version":1,"lenses":[],"customFormats":[],"selectedFormatID":"hasselblad-cfv-100c"}"#
+        try Data(json.utf8).write(to: fileURL)
+        let store = LibraryStore(fileURL: fileURL)
+        XCTAssertEqual(store.selectedFormat.id, "digital-44x33")
+        XCTAssertEqual(store.selectedFormat.longSide, 43.8)
+    }
+
     func testCustomFormatRoundTrip() {
         let store = LibraryStore(fileURL: fileURL)
         let format = CaptureFormat.custom(name: "Cropped 4×5", width: 90, height: 115)

@@ -33,7 +33,7 @@ targets:
         CFBundleVersion: $(CURRENT_PROJECT_VERSION)
         NSCameraUsageDescription: TechFinder shows your composition through the iPhone camera, framed for your lens and format.
         UILaunchScreen:
-          UIColorName: ""
+          UIColorName: LaunchBackground
         UIRequiresFullScreen: true
         UIStatusBarHidden: true
         UIStatusBarStyle: UIStatusBarStyleLightContent

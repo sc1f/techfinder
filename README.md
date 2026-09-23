@@ -43,6 +43,28 @@ Packages/TechFinderCore/     models, format catalog, framing math, persistence, 
 - **Every push and pull request:** builds and runs the tests on an iPhone Simulator.
 - **TestFlight:** runs from *Actions › iOS › Run workflow*, or when you push a tag such as `v0.1.0`. It archives, signs, and uploads to TestFlight. The build number is the workflow run number.
 
+- **Unsigned iPhone build:** every push to `main` also saves an unsigned build of the app, made with the latest Xcode.
+
+### Installing the Liquid Glass build with a free Apple ID
+
+Your Mac doesn't need Xcode 26 for this. With the iPhone connected and unlocked, run:
+
+```bash
+scripts/install-liquid-glass.sh
+```
+
+The script downloads the latest unsigned build from CI and signs it with your Personal Team. If there's no provisioning profile for the phone yet, it asks Xcode to make one. Then it installs the app with `devicectl`. Free-team installs stop opening after 7 days; run the script again to refresh.
+
+Requirements:
+
+- The `gh` command-line tool, signed in to GitHub.
+- Your Apple ID added in Xcode › Settings › Accounts.
+- The phone set up for development once: trusted, Developer Mode on, and seen by Xcode.
+
+If your phone runs a newer iOS than your Xcode supports, Xcode can't use it for development until it has the matching iOS developer disk image. You can take the image from a newer Xcode's `XcodeSystemResources.pkg` and install it with `sudo xcrun devicectl manage ddis update --source-dir <dir>`.
+
+### TestFlight
+
 One-time setup for TestFlight (requires the paid Apple Developer Program):
 
 1. In [App Store Connect](https://appstoreconnect.apple.com) › Apps, create a new iOS app with bundle ID `com.scif.TechFinder`. Register the ID first under Certificates, IDs & Profiles › Identifiers if it isn't listed. App Store names must be unique, so choose another name if "TechFinder" is taken; the name on the home screen stays TechFinder.

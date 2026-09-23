@@ -5,6 +5,7 @@ import TechFinderCore
 struct FormatPickerView: View {
     @Environment(LibraryStore.self) private var library
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.closePanel) private var closePanel
     @State private var editor: FormatEditorItem?
 
     private let presetCategories = CaptureFormat.Category.allCases.filter { $0 != .custom }
@@ -62,19 +63,23 @@ struct FormatPickerView: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("Done") { dismiss() }
+                    Button("Done", action: close)
                 }
             }
-            .sheet(item: $editor) { item in
+            .navigationDestination(item: $editor) { item in
                 FormatEditorView(item: item)
             }
         }
     }
 
+    private func close() {
+        if let closePanel { closePanel() } else { dismiss() }
+    }
+
     private func row(for format: CaptureFormat) -> some View {
         Button {
             library.selectedFormatID = format.id
-            dismiss()
+            close()
         } label: {
             HStack {
                 VStack(alignment: .leading, spacing: 2) {
@@ -98,7 +103,7 @@ struct FormatPickerView: View {
     }
 }
 
-struct FormatEditorItem: Identifiable {
+struct FormatEditorItem: Identifiable, Hashable {
     let format: CaptureFormat
     let isNew: Bool
     var id: String { format.id }
@@ -112,7 +117,7 @@ struct FormatEditorItem: Identifiable {
     }
 }
 
-/// Creates or edits a custom format from its image-area dimensions.
+/// Creates or edits a custom format from its image-area dimensions. Pushed from the format picker.
 struct FormatEditorView: View {
     @Environment(LibraryStore.self) private var library
     @Environment(\.dismiss) private var dismiss
@@ -136,41 +141,35 @@ struct FormatEditorView: View {
     }
 
     var body: some View {
-        NavigationStack {
-            Form {
-                Section {
-                    TextField("Name", text: $name)
-                        .textInputAutocapitalization(.words)
-                    dimensionField("Width", text: $widthText)
-                    dimensionField("Height", text: $heightText)
-                } footer: {
-                    Text("The exposed image area in millimetres. Hold the phone the way the back is mounted; the frame follows.")
-                }
-
-                if let dimensions {
-                    Section {
-                        HStack {
-                            Spacer()
-                            AspectPreview(width: dimensions.width, height: dimensions.height)
-                            Spacer()
-                        }
-                        .listRowBackground(Color.clear)
-                    }
-                }
+        Form {
+            Section {
+                TextField("Name", text: $name)
+                    .textInputAutocapitalization(.words)
+                dimensionField("Width", text: $widthText)
+                dimensionField("Height", text: $heightText)
+            } footer: {
+                Text("The exposed image area in millimetres. Hold the phone the way the back is mounted; the frame follows.")
             }
-            .navigationTitle(item.isNew ? "New Format" : "Edit Format")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("Cancel") { dismiss() }
-                }
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("Save", action: save)
-                        .disabled(dimensions == nil)
+
+            if let dimensions {
+                Section {
+                    HStack {
+                        Spacer()
+                        AspectPreview(width: dimensions.width, height: dimensions.height)
+                        Spacer()
+                    }
+                    .listRowBackground(Color.clear)
                 }
             }
         }
-        .presentationDetents([.medium, .large])
+        .navigationTitle(item.isNew ? "New Format" : "Edit Format")
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItem(placement: .confirmationAction) {
+                Button("Save", action: save)
+                    .disabled(dimensions == nil)
+            }
+        }
     }
 
     private func dimensionField(_ title: String, text: Binding<String>) -> some View {

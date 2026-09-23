@@ -35,12 +35,11 @@ final class CameraController: @unchecked Sendable {
     /// Last zoom asked for; applied once the device exists if it was requested earlier.
     @ObservationIgnored private var requestedZoom: Double = 1
     @ObservationIgnored private var appliedZoom: Double?
-    @ObservationIgnored private var subjectAreaObserver: NSObjectProtocol?
     @ObservationIgnored private var runtimeErrorObserver: NSObjectProtocol?
 
     deinit {
-        for observer in [subjectAreaObserver, runtimeErrorObserver].compactMap({ $0 }) {
-            NotificationCenter.default.removeObserver(observer)
+        if let runtimeErrorObserver {
+            NotificationCenter.default.removeObserver(runtimeErrorObserver)
         }
     }
 
@@ -88,12 +87,20 @@ final class CameraController: @unchecked Sendable {
         }
     }
 
-    /// Focuses and meters once at a point, in device coordinates ((0,0) top-left of the landscape sensor image).
-    /// Returns to continuous centre-weighted behaviour when the scene changes or the lens changes.
+    /// Keeps focusing and metering at a point, in device coordinates ((0,0) top-left of the landscape
+    /// sensor image), until another point is chosen, the lens changes or `resetFocusAndExposure()`.
     func focusAndMeter(at devicePoint: CGPoint) {
         queue.async { [self] in
             guard let device else { return }
-            setFocusAndExposure(on: device, at: devicePoint, continuous: false)
+            setFocusAndExposure(on: device, at: devicePoint)
+        }
+    }
+
+    /// Returns to automatic focus and exposure for the centre of the image.
+    func resetFocusAndExposure() {
+        queue.async { [self] in
+            guard let device else { return }
+            setFocusAndExposure(on: device, at: CGPoint(x: 0.5, y: 0.5))
         }
     }
 
@@ -117,14 +124,15 @@ final class CameraController: @unchecked Sendable {
             // Zoom is best effort: the frame is still computed from the requested factor.
         }
         if isNewFraming {
-            // A tapped focus point belongs to the previous framing.
-            setFocusAndExposure(on: device, at: CGPoint(x: 0.5, y: 0.5), continuous: true)
+            // A chosen focus point belongs to the previous framing.
+            setFocusAndExposure(on: device, at: CGPoint(x: 0.5, y: 0.5))
         }
     }
 
-    private func setFocusAndExposure(on device: AVCaptureDevice, at point: CGPoint, continuous: Bool) {
-        let focusMode: AVCaptureDevice.FocusMode = continuous ? .continuousAutoFocus : .autoFocus
-        let exposureMode: AVCaptureDevice.ExposureMode = continuous ? .continuousAutoExposure : .autoExpose
+    /// Continuous focus and exposure weighted to `point`, so the phone keeps adjusting there as it moves.
+    private func setFocusAndExposure(on device: AVCaptureDevice, at point: CGPoint) {
+        let focusMode: AVCaptureDevice.FocusMode = .continuousAutoFocus
+        let exposureMode: AVCaptureDevice.ExposureMode = .continuousAutoExposure
         do {
             try device.lockForConfiguration()
             if device.isFocusPointOfInterestSupported, device.isFocusModeSupported(focusMode) {
@@ -135,7 +143,6 @@ final class CameraController: @unchecked Sendable {
                 device.exposurePointOfInterest = point
                 device.exposureMode = exposureMode
             }
-            device.isSubjectAreaChangeMonitoringEnabled = !continuous
             device.unlockForConfiguration()
         } catch {
             // Focus and metering are conveniences; framing does not depend on them.
@@ -174,14 +181,9 @@ final class CameraController: @unchecked Sendable {
             return
         }
 
-        // Frames for the blurred backdrop. Optional: without it the controls sit on black.
-        backdropOutput.alwaysDiscardsLateVideoFrames = true
-        backdropOutput.setSampleBufferDelegate(backdropRenderer, queue: backdropQueue)
-        backdropRenderer.onImage = { [weak self] image in
-            self?.backdrop = image
-        }
-        if session.canAddOutput(backdropOutput) {
-            session.addOutput(backdropOutput)
+        // Frames for the blurred backdrop behind Liquid Glass. Without glass the background stays black.
+        if LiquidGlass.isAvailable {
+            addBackdropOutput()
         }
 
         self.device = device
@@ -196,17 +198,20 @@ final class CameraController: @unchecked Sendable {
             self?.status = .failed(error?.localizedDescription ?? "The camera stopped unexpectedly.")
         }
 
-        subjectAreaObserver = NotificationCenter.default.addObserver(
-            forName: AVCaptureDevice.subjectAreaDidChangeNotification, object: device, queue: nil
-        ) { [weak self] _ in
-            guard let self else { return }
-            self.queue.async {
-                self.setFocusAndExposure(on: device, at: CGPoint(x: 0.5, y: 0.5), continuous: true)
-            }
-        }
 
         let optics = Self.optics(of: device)
         DispatchQueue.main.async { self.optics = optics }
+    }
+
+    private func addBackdropOutput() {
+        backdropOutput.alwaysDiscardsLateVideoFrames = true
+        backdropOutput.setSampleBufferDelegate(backdropRenderer, queue: backdropQueue)
+        backdropRenderer.onImage = { [weak self] image in
+            self?.backdrop = image
+        }
+        if session.canAddOutput(backdropOutput) {
+            session.addOutput(backdropOutput)
+        }
     }
 
     private static func bestBackCamera() -> AVCaptureDevice? {

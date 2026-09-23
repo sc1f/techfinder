@@ -5,6 +5,7 @@ import TechFinderCore
 struct LensLibraryView: View {
     @Environment(LibraryStore.self) private var library
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.closePanel) private var closePanel
     @State private var editor: LensEditorItem?
 
     var body: some View {
@@ -37,7 +38,7 @@ struct LensLibraryView: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("Done") { dismiss() }
+                    Button("Done", action: close)
                 }
                 ToolbarItem(placement: .primaryAction) {
                     Button {
@@ -47,10 +48,14 @@ struct LensLibraryView: View {
                     }
                 }
             }
-            .sheet(item: $editor) { item in
+            .navigationDestination(item: $editor) { item in
                 LensEditorView(item: item)
             }
         }
+    }
+
+    private func close() {
+        if let closePanel { closePanel() } else { dismiss() }
     }
 
     private func row(for lens: Lens, format: CaptureFormat) -> some View {
@@ -60,7 +65,7 @@ struct LensLibraryView: View {
         return HStack(spacing: 12) {
             Button {
                 library.selectedLensID = lens.id
-                dismiss()
+                close()
             } label: {
                 HStack(spacing: 12) {
                     Text(lens.focalLengthLabel)
@@ -107,7 +112,7 @@ struct LensLibraryView: View {
     }
 }
 
-struct LensEditorItem: Identifiable {
+struct LensEditorItem: Identifiable, Hashable {
     let lens: Lens
     let isNew: Bool
     var id: UUID { lens.id }

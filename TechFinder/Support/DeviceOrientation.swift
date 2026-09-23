@@ -33,6 +33,14 @@ final class DeviceOrientation {
     @ObservationIgnored private let motion = CMMotionManager()
 
     init() {
+        #if DEBUG
+        // For screenshots and Simulator testing: `-TFSimulateHold landscapeLeft` (or landscapeRight).
+        switch UserDefaults.standard.string(forKey: "TFSimulateHold") {
+        case "landscapeLeft": hold = .landscapeLeft; return
+        case "landscapeRight": hold = .landscapeRight; return
+        default: break
+        }
+        #endif
         guard motion.isDeviceMotionAvailable else { return }
         motion.deviceMotionUpdateInterval = 0.1
         motion.startDeviceMotionUpdates(to: .main) { [weak self] data, _ in

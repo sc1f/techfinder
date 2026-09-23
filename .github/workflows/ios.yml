@@ -57,6 +57,50 @@ jobs:
             -resultBundlePath "$RUNNER_TEMP/TestResults.xcresult" \
             | tee "$RUNNER_TEMP/xcodebuild.log" | grep -E "error:|warning:|Executed|TEST (SUCCEEDED|FAILED)"
 
+      # Launches the app in the Simulator to catch hangs (a SwiftUI layout loop shows up as a pinned CPU)
+      # and saves screenshots of the main states for review.
+      - name: Launch check and screenshots
+        run: |
+          set -o pipefail
+          xcodebuild build \
+            -project TechFinder.xcodeproj \
+            -scheme TechFinder \
+            -destination "id=$SIMULATOR_UDID" \
+            -derivedDataPath "$RUNNER_TEMP/sim" \
+            | grep -E "error:|BUILD (SUCCEEDED|FAILED)"
+          app="$RUNNER_TEMP/sim/Build/Products/Debug-iphonesimulator/TechFinder.app"
+          xcrun simctl boot "$SIMULATOR_UDID" 2>/dev/null || true
+          xcrun simctl bootstatus "$SIMULATOR_UDID" -b >/dev/null
+          xcrun simctl install "$SIMULATOR_UDID" "$app"
+          mkdir -p "$RUNNER_TEMP/screens"
+          failed=0
+          shoot() {
+            name="$1"; shift
+            xcrun simctl terminate "$SIMULATOR_UDID" com.scif.TechFinder 2>/dev/null || true
+            xcrun simctl launch "$SIMULATOR_UDID" com.scif.TechFinder "$@" >/dev/null
+            sleep 15
+            pid="$(pgrep -f 'TechFinder.app/TechFinder' | head -1)"
+            if [ -z "$pid" ]; then echo "::error::TechFinder is not running ($name)"; failed=1; return; fi
+            cpu=0
+            for _ in 1 2 3; do cpu=$(echo "$cpu + $(ps -o %cpu= -p "$pid" | tr -d ' ')" | bc); sleep 1; done
+            echo "$name: average CPU $(echo "$cpu / 3" | bc)%"
+            if [ "$(echo "$cpu / 3 > 80" | bc)" = 1 ]; then echo "::error::TechFinder looks hung ($name)"; failed=1; fi
+            xcrun simctl io "$SIMULATOR_UDID" screenshot "$RUNNER_TEMP/screens/$name.png" >/dev/null
+          }
+          shoot 1-viewfinder
+          shoot 2-lenses -TFPresent lenses
+          shoot 3-landscape-left -TFSimulateHold landscapeLeft
+          shoot 4-landscape-right-formats -TFSimulateHold landscapeRight -TFPresent formats
+          exit $failed
+
+      - name: Upload screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: screenshots
+          path: ${{ runner.temp }}/screens
+          retention-days: 14
+
       # An unsigned Release build for iPhone, so a free Apple ID can sign and install it locally with
       # scripts/install-liquid-glass.sh (Liquid Glass needs this newer SDK).
       - name: Build unsigned iPhone app

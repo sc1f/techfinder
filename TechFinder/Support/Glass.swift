@@ -31,20 +31,19 @@ extension View {
     }
 }
 
-/// Groups glass surfaces so that, on iOS 26, neighbouring shapes blend and morph together.
-struct GlassGroup<Content: View>: View {
-    var spacing: CGFloat = 12
-    @ViewBuilder var content: Content
-
-    var body: some View {
+extension View {
+    /// Turns the view into a clear, lifted glass lens while `isActive`, like the iOS 26 segmented
+    /// control's thumb during a drag.
+    @ViewBuilder
+    func glassLens<S: Shape>(_ shape: S, isActive: Bool) -> some View {
         #if compiler(>=6.2)
         if #available(iOS 26.0, *) {
-            GlassEffectContainer(spacing: spacing) { content }
+            glassEffect(isActive ? Glass.clear.interactive() : .identity, in: shape)
         } else {
-            content
+            overlay(shape.stroke(.white.opacity(isActive ? 0.35 : 0), lineWidth: 1))
         }
         #else
-        content
+        overlay(shape.stroke(.white.opacity(isActive ? 0.35 : 0), lineWidth: 1))
         #endif
     }
 }

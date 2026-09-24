@@ -8,7 +8,9 @@
 
 /* Begin PBXBuildFile section */
 		234909BE59B486AAD437B5EA /* ViewfinderView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A3969A99DBD2AE10EC4C29A0 /* ViewfinderView.swift */; };
+		24B8D18572C0EE6372A6D57A /* MeterBar.swift in Sources */ = {isa = PBXBuildFile; fileRef = A9081AB6D466D9B6128B2E46 /* MeterBar.swift */; };
 		2759AE6B710324CF720A06A9 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = BCC2D6C5BE9D6BD8C43D59B9 /* Assets.xcassets */; };
+		304CE16860A21318333CD95B /* ExposureSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 139CB32D530EC706D670DE1A /* ExposureSettingsView.swift */; };
 		342B98B3F84D5FBD6A50BC15 /* TechFinderApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = F3F660CB7BFF36E60939F0C2 /* TechFinderApp.swift */; };
 		365226B08C393ABE6A2F38F4 /* Glass.swift in Sources */ = {isa = PBXBuildFile; fileRef = D9EFA09D3DA46F09C9F7A554 /* Glass.swift */; };
 		3A79900073753C118C549C2B /* DeviceOrientation.swift in Sources */ = {isa = PBXBuildFile; fileRef = 09CCFCD19DD3612784D4ADFB /* DeviceOrientation.swift */; };
@@ -38,6 +40,7 @@
 /* Begin PBXFileReference section */
 		02E1E7C2C26E92316167533B /* FrameOverlay.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FrameOverlay.swift; sourceTree = "<group>"; };
 		09CCFCD19DD3612784D4ADFB /* DeviceOrientation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeviceOrientation.swift; sourceTree = "<group>"; };
+		139CB32D530EC706D670DE1A /* ExposureSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExposureSettingsView.swift; sourceTree = "<group>"; };
 		1FD8A5E79308384BE219F6D9 /* ControlBar.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ControlBar.swift; sourceTree = "<group>"; };
 		21304C25CCE38C75D150A8BA /* Panel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Panel.swift; sourceTree = "<group>"; };
 		2DCC5BB0DBDCEA3ADCF36DA4 /* TechFinder.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = TechFinder.app; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -47,6 +50,7 @@
 		9A145961DA11D916FEBF749A /* TechFinderCore */ = {isa = PBXFileReference; lastKnownFileType = folder; name = TechFinderCore; path = Packages/TechFinderCore; sourceTree = SOURCE_ROOT; };
 		A108B37B22C6CFB9940CD7EF /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		A3969A99DBD2AE10EC4C29A0 /* ViewfinderView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ViewfinderView.swift; sourceTree = "<group>"; };
+		A9081AB6D466D9B6128B2E46 /* MeterBar.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MeterBar.swift; sourceTree = "<group>"; };
 		AA82ECA49E5B783C1C8E31AC /* LensLibraryView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LensLibraryView.swift; sourceTree = "<group>"; };
 		BCC2D6C5BE9D6BD8C43D59B9 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		C847B53F09284C239161CDE6 /* CameraController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CameraController.swift; sourceTree = "<group>"; };
@@ -109,10 +113,12 @@
 			isa = PBXGroup;
 			children = (
 				1FD8A5E79308384BE219F6D9 /* ControlBar.swift */,
+				139CB32D530EC706D670DE1A /* ExposureSettingsView.swift */,
 				D5E41A047F1D41D66B678243 /* FormatPickerView.swift */,
 				02E1E7C2C26E92316167533B /* FrameOverlay.swift */,
 				2E18ADAFB4F9D6E439F6DA7A /* LensEditorView.swift */,
 				AA82ECA49E5B783C1C8E31AC /* LensLibraryView.swift */,
+				A9081AB6D466D9B6128B2E46 /* MeterBar.swift */,
 				D8236BA655A2C43493EB68C3 /* SimulatedScene.swift */,
 				A3969A99DBD2AE10EC4C29A0 /* ViewfinderView.swift */,
 			);
@@ -270,11 +276,13 @@
 				4FB64422AD093BBDF061360D /* CameraPreview.swift in Sources */,
 				E522A13E91EA83540714F1AD /* ControlBar.swift in Sources */,
 				3A79900073753C118C549C2B /* DeviceOrientation.swift in Sources */,
+				304CE16860A21318333CD95B /* ExposureSettingsView.swift in Sources */,
 				E1D80B4CEC4FCCB0CC9FDEB9 /* FormatPickerView.swift in Sources */,
 				A53B642B1937F3BBE6264916 /* FrameOverlay.swift in Sources */,
 				365226B08C393ABE6A2F38F4 /* Glass.swift in Sources */,
 				722AA208955D49DB568EBAF9 /* LensEditorView.swift in Sources */,
 				473396F7A738F65E02D47B64 /* LensLibraryView.swift in Sources */,
+				24B8D18572C0EE6372A6D57A /* MeterBar.swift in Sources */,
 				7910D696A199ADEB1C98F76B /* Panel.swift in Sources */,
 				BFDAF99ECF19771555949878 /* SimulatedScene.swift in Sources */,
 				342B98B3F84D5FBD6A50BC15 /* TechFinderApp.swift in Sources */,

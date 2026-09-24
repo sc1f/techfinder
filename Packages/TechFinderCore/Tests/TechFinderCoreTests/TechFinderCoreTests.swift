@@ -114,3 +114,94 @@ final class LibraryStoreTests: XCTestCase {
         XCTAssertEqual(reloaded.selectedFormat.id, FormatCatalog.defaultFormatID)
     }
 }
+
+final class ExposureTests: XCTestCase {
+    private func index(_ axis: ExposureAxis, _ label: String) -> Int {
+        ExposureScale.labels(axis).firstIndex(of: label)!
+    }
+
+    func testScalesLineUpWithTheirLabels() {
+        XCTAssertEqual(ExposureScale.iso(index(.iso, "100")), 100, accuracy: 1e-9)
+        XCTAssertEqual(ExposureScale.iso(index(.iso, "3200")), 3200, accuracy: 20)
+        XCTAssertEqual(ExposureScale.aperture(index(.aperture, "8")), 8, accuracy: 1e-9)
+        XCTAssertEqual(ExposureScale.aperture(index(.aperture, "22")), 22, accuracy: 0.7)
+        XCTAssertEqual(ExposureScale.shutter(index(.shutter, "1\"")), 1, accuracy: 1e-9)
+        XCTAssertEqual(ExposureScale.shutter(index(.shutter, "1/125")), 1.0 / 128, accuracy: 1e-9)
+        XCTAssertEqual(ExposureScale.shutter(index(.shutter, "30\"")), 32, accuracy: 1e-9)
+    }
+
+    func testSunnySixteen() {
+        // f/16, 1/125 s, ISO 100 is about EV 15.
+        let ev = ExposureSolver.ev100(isoIndex: index(.iso, "100"), apertureIndex: index(.aperture, "16"),
+                                      shutterIndex: index(.shutter, "1/125"))
+        XCTAssertEqual(ev, 15, accuracy: 1e-9)
+    }
+
+    func testAperturePriorityPicksShutter() {
+        let settings = ExposureSettings(isoIndex: index(.iso, "100"), apertureIndex: index(.aperture, "16"),
+                                        shutterIndex: 0, mode: .aperturePriority)
+        let solution = ExposureSolver.solve(settings, meteredEV100: 15)
+        XCTAssertEqual(solution.label(.shutter), "1/125")
+        XCTAssertEqual(solution.meteredAxis, .shutter)
+        XCTAssertEqual(solution.exposureError, 0, accuracy: 1e-9)
+    }
+
+    func testShutterPriorityPicksAperture() {
+        let settings = ExposureSettings(isoIndex: index(.iso, "400"), apertureIndex: 0,
+                                        shutterIndex: index(.shutter, "1/125"), mode: .shutterPriority)
+        // Two stops more ISO: f/16 becomes f/32.
+        let solution = ExposureSolver.solve(settings, meteredEV100: 15)
+        XCTAssertEqual(solution.label(.aperture), "f/32")
+    }
+
+    func testCompensationBrightens() {
+        let settings = ExposureSettings(isoIndex: index(.iso, "100"), apertureIndex: index(.aperture, "16"),
+                                        shutterIndex: 0, mode: .aperturePriority)
+        let solution = ExposureSolver.solve(settings, meteredEV100: 15, compensation: 1)
+        XCTAssertEqual(solution.label(.shutter), "1/60")
+        XCTAssertEqual(solution.exposureError, 1, accuracy: 0.01)
+    }
+
+    func testManualReportsOverAndUnderexposure() {
+        let settings = ExposureSettings(isoIndex: index(.iso, "100"), apertureIndex: index(.aperture, "16"),
+                                        shutterIndex: index(.shutter, "1/250"), mode: .manual)
+        XCTAssertEqual(ExposureSolver.solve(settings, meteredEV100: 15).exposureError, -1, accuracy: 1e-9)
+        XCTAssertNil(ExposureSolver.solve(settings, meteredEV100: 15).meteredAxis)
+    }
+
+    func testLimitsFlagMeteredValues() {
+        let settings = ExposureSettings(isoIndex: index(.iso, "100"), apertureIndex: index(.aperture, "16"),
+                                        shutterIndex: 0, mode: .aperturePriority)
+        // Dim light: several seconds, slower than the 1/500–60 s default is fine, but EV 0 needs ~4 min.
+        let dim = ExposureSolver.solve(settings, meteredEV100: 0)
+        XCTAssertTrue(dim.isOutsideLimits(.shutter, .default))
+        let bright = ExposureSolver.solve(settings, meteredEV100: 15)
+        XCTAssertFalse(bright.isOutsideLimits(.shutter, .default))
+    }
+
+    func testMovingTheMeteredValueSwitchesToManual() {
+        var settings = ExposureSettings(isoIndex: index(.iso, "100"), apertureIndex: index(.aperture, "16"),
+                                        shutterIndex: 0, mode: .aperturePriority)
+        let solution = ExposureSolver.solve(settings, meteredEV100: 15)
+        settings.step(.shutter, by: 1, from: solution)
+        XCTAssertEqual(settings.mode, .manual)
+        XCTAssertEqual(ExposureScale.label(.shutter, settings.shutterIndex), "1/100")
+        XCTAssertEqual(ExposureScale.label(.aperture, settings.apertureIndex), "f/16")
+
+        let manual = ExposureSolver.solve(settings, meteredEV100: 15)
+        settings.lock(.shutter, from: manual)
+        XCTAssertEqual(settings.mode, .shutterPriority)
+        XCTAssertEqual(ExposureScale.label(.shutter, settings.shutterIndex), "1/100")
+    }
+
+    func testExposurePersistsWithTheLibrary() throws {
+        let url = FileManager.default.temporaryDirectory.appendingPathComponent("exposure-\(UUID().uuidString).json")
+        defer { try? FileManager.default.removeItem(at: url) }
+        let store = LibraryStore(fileURL: url)
+        store.exposure.isoIndex = index(.iso, "400")
+        store.exposureLimits.shutter = 10...40
+        let reloaded = LibraryStore(fileURL: url)
+        XCTAssertEqual(reloaded.exposure.isoIndex, index(.iso, "400"))
+        XCTAssertEqual(reloaded.exposureLimits.shutter, 10...40)
+    }
+}

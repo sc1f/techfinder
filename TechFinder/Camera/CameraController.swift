@@ -22,6 +22,9 @@ final class CameraController: @unchecked Sendable {
 
     private(set) var status: Status = .idle
     private(set) var optics: CameraOptics = .simulated
+    /// The scene's exposure value at ISO 100, read from the camera's own metering and smoothed.
+    /// Nil until the first reading.
+    private(set) var meteredEV: Double?
 
     let session = AVCaptureSession()
     private let queue = DispatchQueue(label: "TechFinder.camera")
@@ -31,6 +34,9 @@ final class CameraController: @unchecked Sendable {
     @ObservationIgnored private var requestedZoom: Double = 1
     @ObservationIgnored private var appliedZoom: Double?
     @ObservationIgnored private var runtimeErrorObserver: NSObjectProtocol?
+    @ObservationIgnored private var meterTimer: DispatchSourceTimer?
+    /// Last exposure bias applied, to skip redundant updates (session queue).
+    @ObservationIgnored private var appliedBias: Float = 0
 
     deinit {
         if let runtimeErrorObserver {
@@ -41,8 +47,12 @@ final class CameraController: @unchecked Sendable {
     /// Asks for permission if needed, then configures and starts the session.
     func start() async {
         #if targetEnvironment(simulator)
-        // No real camera in the Simulator; skip the permission prompt and show the simulated scene.
-        await MainActor.run { self.status = .unavailable }
+        // No real camera in the Simulator; skip the permission prompt and show the simulated scene
+        // under a bright overcast sky.
+        await MainActor.run {
+            self.status = .unavailable
+            self.meteredEV = 12
+        }
         return
         #else
         switch AVCaptureDevice.authorizationStatus(for: .video) {
@@ -97,10 +107,11 @@ final class CameraController: @unchecked Sendable {
         }
     }
 
-    /// Brightens or darkens the automatic exposure, in stops, like dragging the Camera app's sun.
+    /// Brightens or darkens the preview relative to the camera's automatic exposure, in stops. Used to
+    /// show how the chosen exposure will look.
     func setExposureBias(_ stops: Float) {
         queue.async { [self] in
-            guard let device else { return }
+            guard let device, abs(stops - appliedBias) > 0.05 else { return }
             applyExposureBias(stops, on: device)
         }
     }
@@ -144,13 +155,14 @@ final class CameraController: @unchecked Sendable {
             try device.lockForConfiguration()
             device.setExposureTargetBias(bias, completionHandler: nil)
             device.unlockForConfiguration()
+            appliedBias = stops
         } catch {
             // Exposure compensation is a convenience; framing does not depend on it.
         }
     }
 
     /// Continuous focus and exposure weighted to `point`, so the phone keeps adjusting there as it moves.
-    /// Any exposure compensation is cleared: it belonged to the previous point.
+    /// The exposure bias is left alone: it shows the chosen exposure and is owned by the light meter.
     private func setFocusAndExposure(on device: AVCaptureDevice, at point: CGPoint) {
         let focusMode: AVCaptureDevice.FocusMode = .continuousAutoFocus
         let exposureMode: AVCaptureDevice.ExposureMode = .continuousAutoExposure
@@ -164,7 +176,6 @@ final class CameraController: @unchecked Sendable {
                 device.exposurePointOfInterest = point
                 device.exposureMode = exposureMode
             }
-            device.setExposureTargetBias(0, completionHandler: nil)
             device.unlockForConfiguration()
         } catch {
             // Focus and metering are conveniences; framing does not depend on them.
@@ -200,6 +211,7 @@ final class CameraController: @unchecked Sendable {
 
         self.device = device
         isConfigured = true
+        startMetering()
 
         applyRequestedZoom()
 
@@ -213,6 +225,39 @@ final class CameraController: @unchecked Sendable {
 
         let optics = Self.optics(of: device)
         DispatchQueue.main.async { self.optics = optics }
+    }
+
+    // MARK: - Light meter (session queue)
+
+    /// Samples the camera's exposure about seven times a second.
+    private func startMetering() {
+        let timer = DispatchSource.makeTimerSource(queue: queue)
+        timer.schedule(deadline: .now() + 0.3, repeating: .milliseconds(150))
+        timer.setEventHandler { [weak self] in self?.sampleMeter() }
+        timer.resume()
+        meterTimer = timer
+    }
+
+    /// The scene's EV at ISO 100 from what the camera is doing now: its exposure settings, how far those
+    /// are from the camera's own target, and the bias applied for the exposure simulation.
+    private func sampleMeter() {
+        guard let device, session.isRunning else { return }
+        let seconds = CMTimeGetSeconds(device.exposureDuration)
+        let iso = Double(device.iso)
+        let fNumber = Double((device.activePrimaryConstituent ?? device).lensAperture)
+        let offset = Double(device.exposureTargetOffset)
+        let bias = Double(device.exposureTargetBias)
+        guard seconds > 0, iso > 0, fNumber > 0, offset.isFinite else { return }
+
+        let ev = ExposureSolver.ev100(fNumber: fNumber, seconds: seconds, iso: iso) + offset + bias
+        guard ev.isFinite else { return }
+        DispatchQueue.main.async {
+            // Smooth out frame-to-frame jitter; publish only changes worth redrawing for.
+            let smoothed = self.meteredEV.map { $0 + (ev - $0) * 0.35 } ?? ev
+            if self.meteredEV.map({ abs($0 - smoothed) > 0.02 }) ?? true {
+                self.meteredEV = smoothed
+            }
+        }
     }
 
     private static func bestBackCamera() -> AVCaptureDevice? {

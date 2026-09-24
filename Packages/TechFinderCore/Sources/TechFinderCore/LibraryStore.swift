@@ -9,6 +9,10 @@ public final class LibraryStore {
     public private(set) var customFormats: [CaptureFormat] = []
     public var selectedLensID: Lens.ID? { didSet { save() } }
     public var selectedFormatID: CaptureFormat.ID { didSet { save() } }
+    /// ISO, aperture, shutter and which one follows the light meter.
+    public var exposure: ExposureSettings = .default { didSet { save() } }
+    /// The equipment's ISO, aperture and shutter limits, for warnings.
+    public var exposureLimits: ExposureLimits = .default { didSet { save() } }
 
     @ObservationIgnored private let fileURL: URL?
 
@@ -23,6 +27,8 @@ public final class LibraryStore {
             customFormats = snapshot.customFormats
             selectedLensID = snapshot.selectedLensID
             selectedFormatID = FormatCatalog.legacyFormatIDs[snapshot.selectedFormatID] ?? snapshot.selectedFormatID
+            exposure = snapshot.exposure ?? .default
+            exposureLimits = snapshot.exposureLimits ?? .default
         } else {
             lenses = FormatCatalog.starterLenses.sorted(by: Self.lensOrder)
             selectedLensID = lenses.first(where: { $0.focalLength == 50 })?.id ?? lenses.first?.id
@@ -106,6 +112,9 @@ public final class LibraryStore {
         var customFormats: [CaptureFormat]
         var selectedLensID: Lens.ID?
         var selectedFormatID: CaptureFormat.ID
+        // Added later; missing in older files.
+        var exposure: ExposureSettings?
+        var exposureLimits: ExposureLimits?
     }
 
     private static func lensOrder(_ a: Lens, _ b: Lens) -> Bool {
@@ -125,7 +134,8 @@ public final class LibraryStore {
     private func save() {
         guard let fileURL else { return }
         let snapshot = Snapshot(lenses: lenses, customFormats: customFormats,
-                                selectedLensID: selectedLensID, selectedFormatID: selectedFormatID)
+                                selectedLensID: selectedLensID, selectedFormatID: selectedFormatID,
+                                exposure: exposure, exposureLimits: exposureLimits)
         do {
             let data = try JSONEncoder().encode(snapshot)
             try data.write(to: fileURL, options: .atomic)

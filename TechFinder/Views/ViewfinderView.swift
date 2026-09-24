@@ -24,7 +24,7 @@ struct ViewfinderView: View {
     @State private var pinchStartFill: Double?
 
     enum Sheet: String, Identifiable {
-        case lenses, formats, newLens
+        case lenses, formats, newLens, settings
         var id: String { rawValue }
     }
 
@@ -44,19 +44,24 @@ struct ViewfinderView: View {
 
     var body: some View {
         let solution = self.solution
-        feedback(presentations(lifecycle(screen(solution: solution), solution: solution)))
+        let exposure = ExposureSolver.solve(library.exposure, meteredEV100: camera.meteredEV,
+                                            compensation: Double(exposureBias))
+        feedback(presentations(simulation(lifecycle(screen(solution: solution, exposure: exposure), solution: solution),
+                                          exposure: exposure)))
+    }
+
+    private var exposureSettings: Binding<ExposureSettings> {
+        Binding(get: { library.exposure }, set: { library.exposure = $0 })
     }
 
     // MARK: - Layout
 
-    private func screen(solution: FramingSolution?) -> some View {
-        let isSimulated = camera.status == .unavailable
-
-        return ZStack {
+    private func screen(solution: FramingSolution?, exposure: ExposureSolution) -> some View {
+        ZStack {
             Color.black.ignoresSafeArea()
             viewfinder(solution: solution)
-            controls(solution: solution)
-            sideSetup(solution: solution, isSimulated: isSimulated)
+            controls(solution: solution, exposure: exposure)
+            sideBlocks(solution: solution, exposure: exposure)
             permissionMessage
             if let panel {
                 RotatedPanel(rotation: orientation.rotation, close: closePanel) {
@@ -97,23 +102,41 @@ struct ViewfinderView: View {
         .gesture(pinchToAdjustFill)
     }
 
-    private func controls(solution: FramingSolution?) -> some View {
+    private func controls(solution: FramingSolution?, exposure: ExposureSolution) -> some View {
         VStack(spacing: 0) {
-            SetupBar(lens: library.selectedLens, format: library.selectedFormat,
-                     isClipped: solution?.isClipped == true, isSimulated: camera.status == .unavailable,
-                     present: present)
+            topBlock(exposure: exposure, rotation: orientation.rotation)
                 .padding(.top, 8)
                 .opacity(orientation.isLandscape ? 0 : 1)
                 .allowsHitTesting(!orientation.isLandscape)
             Spacer()
-            ToolRow(rotation: orientation.rotation, showsGrid: $showsGrid,
-                    canResetFill: abs(fill - Framing.defaultFill) > 0.001,
-                    resetFill: { withAnimation(.smooth) { fill = Framing.defaultFill } })
+            setupBlock(solution: solution)
                 .padding(.bottom, 12)
+                .opacity(orientation.isLandscape ? 0 : 1)
+                .allowsHitTesting(!orientation.isLandscape)
             ControlBar(present: present, rotation: orientation.rotation)
                 .padding(.bottom, 8)
         }
         .padding(.horizontal, 16)
+    }
+
+    /// The light meter with the tools under it. In landscape the whole block is turned, so its icons
+    /// don't turn on their own (`rotation` is zero there).
+    private func topBlock(exposure: ExposureSolution, rotation: Angle) -> some View {
+        VStack(spacing: 8) {
+            MeterBar(settings: exposureSettings, solution: exposure, limits: library.exposureLimits,
+                     hasReading: camera.meteredEV != nil)
+            ToolRow(rotation: rotation, showsGrid: $showsGrid,
+                    canResetFill: abs(fill - Framing.defaultFill) > 0.001,
+                    resetFill: { withAnimation(.smooth) { fill = Framing.defaultFill } },
+                    openSettings: { present(.settings) })
+        }
+    }
+
+    /// The lens and format pills, with the warning above them when the setup is too wide.
+    private func setupBlock(solution: FramingSolution?) -> some View {
+        SetupBar(lens: library.selectedLens, format: library.selectedFormat,
+                 isClipped: solution?.isClipped == true, isSimulated: camera.status == .unavailable,
+                 present: present)
     }
 
     // MARK: - Behaviour
@@ -166,6 +189,15 @@ struct ViewfinderView: View {
             #endif
     }
 
+    /// Shows the chosen exposure in the viewfinder: the preview is brightened or darkened by however
+    /// many stops the settings are over- or underexposed.
+    private func simulation(_ content: some View, exposure: ExposureSolution) -> some View {
+        content
+            .onChange(of: exposure.exposureError, initial: true) { _, error in
+                camera.setExposureBias(Float(error))
+            }
+    }
+
     private func feedback(_ content: some View) -> some View {
         content
             .sensoryFeedback(.selection, trigger: library.selectedLensID)
@@ -206,38 +238,35 @@ struct ViewfinderView: View {
             NavigationStack {
                 LensEditorView(item: .new(), isRoot: true)
             }
+        case .settings:
+            ExposureSettingsView()
         }
     }
 
-    /// In landscape the lens and format pills run along whichever screen edge is currently "up" for the
-    /// viewer, turned to read along it, with the warning tag on the inner side.
+    /// In landscape the meter and tools run along the viewer's top edge and the lens and format pills
+    /// along the viewer's bottom edge, each turned to read along it.
     @ViewBuilder
-    private func sideSetup(solution: FramingSolution?, isSimulated: Bool) -> some View {
+    private func sideBlocks(solution: FramingSolution?, exposure: ExposureSolution) -> some View {
         if orientation.isLandscape {
             let isClipped = solution?.isClipped == true
+            let pill = GlassButtonMetrics.pillHeight
             GeometryReader { geometry in
-                // Distance from the screen edge to the centre of the turned block.
-                let depth = GlassButtonMetrics.pillHeight + (isClipped ? 8 + WarningTag.height : 0)
-                let inset = 12 + depth / 2
-                let x = orientation.hold == .landscapeLeft ? geometry.size.width - inset : inset
+                // Distance from each screen edge to the centre of its turned block.
+                let topInset = 12 + (pill * 2 + 8) / 2
+                let bottomInset = 12 + (pill + (isClipped ? 8 + WarningTag.height : 0)) / 2
+                let turnedLeft = orientation.hold == .landscapeLeft
 
-                VStack(spacing: 8) {
-                    HStack(spacing: 8) {
-                        LensPillButton(lens: library.selectedLens, format: library.selectedFormat,
-                                       isSimulated: isSimulated) {
-                            present(library.selectedLens == nil ? .newLens : .lenses)
-                        }
-                        FormatPillButton(format: library.selectedFormat) {
-                            present(.formats)
-                        }
-                    }
-                    if isClipped {
-                        WarningTag()
-                    }
-                }
-                .fixedSize()
-                .rotationEffect(orientation.rotation)
-                .position(x: x, y: geometry.size.height / 2)
+                topBlock(exposure: exposure, rotation: .zero)
+                    .frame(width: 340)
+                    .fixedSize()
+                    .rotationEffect(orientation.rotation)
+                    .position(x: turnedLeft ? geometry.size.width - topInset : topInset, y: geometry.size.height / 2)
+
+                setupBlock(solution: solution)
+                    .fixedSize()
+                    .rotationEffect(orientation.rotation)
+                    .position(x: turnedLeft ? bottomInset : geometry.size.width - bottomInset,
+                              y: geometry.size.height / 2)
             }
             .transition(.opacity)
         }
@@ -295,7 +324,6 @@ struct ViewfinderView: View {
                 let start = exposureDragStart ?? exposureBias
                 exposureDragStart = start
                 exposureBias = min(max(start - Float(value.translation.height / 100), -2), 2)
-                camera.setExposureBias(exposureBias)
             }
             .onEnded { _ in
                 exposureDragStart = nil
@@ -371,7 +399,7 @@ private struct FocusSquare: View {
 // MARK: - Top bar
 
 /// The lens and format pills, centred. When the setup is wider than the phone can see, a warning tag
-/// hangs underneath.
+/// sits above them.
 private struct SetupBar: View {
     let lens: Lens?
     let format: CaptureFormat
@@ -381,6 +409,10 @@ private struct SetupBar: View {
 
     var body: some View {
         VStack(spacing: 8) {
+            if isClipped {
+                WarningTag()
+                    .transition(.opacity.combined(with: .scale(scale: 0.9, anchor: .bottom)))
+            }
             HStack(spacing: 8) {
                 LensPillButton(lens: lens, format: format, isSimulated: isSimulated) {
                     present(lens == nil ? .newLens : .lenses)
@@ -390,10 +422,6 @@ private struct SetupBar: View {
                 }
                 .fixedSize()
             }
-            if isClipped {
-                WarningTag()
-                    .transition(.opacity.combined(with: .scale(scale: 0.9, anchor: .top)))
-            }
         }
         .animation(.smooth, value: isClipped)
     }
@@ -401,13 +429,13 @@ private struct SetupBar: View {
 
 // MARK: - Tools
 
-/// Frame tools above the lens selector, centred: grid and reset frame size for now; the light meter
-/// and settings will join them.
+/// Tools under the light meter, centred: grid, reset frame size and settings.
 private struct ToolRow: View {
     let rotation: Angle
     @Binding var showsGrid: Bool
     let canResetFill: Bool
     let resetFill: () -> Void
+    let openSettings: () -> Void
 
     var body: some View {
         HStack(spacing: 10) {
@@ -420,6 +448,10 @@ private struct ToolRow: View {
             }
             .disabled(!canResetFill)
             .accessibilityIdentifier("resetFrameButton")
+            ToolButton(systemImage: "slider.horizontal.3", label: "Settings", rotation: rotation) {
+                openSettings()
+            }
+            .accessibilityIdentifier("settingsButton")
         }
     }
 }

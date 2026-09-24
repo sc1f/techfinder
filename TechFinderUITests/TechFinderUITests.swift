@@ -40,6 +40,24 @@ final class TechFinderUITests: XCTestCase {
         attachScreenshot(of: app, named: "format")
     }
 
+    func testMeterAndSettings() {
+        let app = XCUIApplication()
+        app.launch()
+
+        let shutter = app.otherElements["meter-shutter"].firstMatch
+        XCTAssertTrue(shutter.waitForExistence(timeout: 15), "Light meter should appear")
+        shutter.tap() // Hold the shutter; the aperture follows the meter.
+        attachScreenshot(of: app, named: "meter-shutter-locked")
+
+        let settings = app.buttons["settingsButton"]
+        XCTAssertTrue(settings.waitForExistence(timeout: 5))
+        settings.tap()
+        XCTAssertTrue(app.navigationBars["Settings"].waitForExistence(timeout: 5))
+        attachScreenshot(of: app, named: "settings")
+        app.buttons["Done"].firstMatch.tap()
+        XCTAssertTrue(settings.waitForExistence(timeout: 5))
+    }
+
     private func attachScreenshot(of app: XCUIApplication, named name: String) {
         let attachment = XCTAttachment(screenshot: app.screenshot())
         attachment.name = name

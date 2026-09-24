@@ -67,6 +67,11 @@ check(LibraryStore(fileURL: legacyURL).selectedFormat.id == "digital-44x33", "le
 check(Set(FormatCatalog.presets.map(\.id)).count == FormatCatalog.presets.count, "preset ids unique")
 check(FormatCatalog.legacyFormatIDs.values.allSatisfy { id in FormatCatalog.presets.contains { $0.id == id } }, "legacy ids map to presets")
 
+let sunny = ExposureSettings(isoIndex: 12, apertureIndex: 24, shutterIndex: 0, mode: .aperturePriority)
+check(ExposureSolver.solve(sunny, meteredEV100: 15).label(.shutter) == "1/125", "sunny 16 shutter")
+check(abs(ExposureSolver.ev100(isoIndex: 12, apertureIndex: 24, shutterIndex: 18) - 15) < 1e-9, "EV 15")
+check(ExposureScale.labels(.shutter)[39] == "1\"" && ExposureScale.labels(.aperture)[18] == "8" && ExposureScale.labels(.iso)[12] == "100", "scale anchors")
+
 print(String(format: "Sample: 32mm on IQ4 → zoom %.2fx, frame %.0f%% × %.0f%%, %@, %@",
              s32.zoom, s32.longFraction * 100, s32.shortFraction * 100,
              FieldOfView(focalLength: 32, format: iq4).anglesLabel, FieldOfView(focalLength: 32, format: iq4).equivalentLabel))

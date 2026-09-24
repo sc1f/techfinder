@@ -312,6 +312,9 @@ struct ViewfinderView: View {
                 // A new lens's nickname, if it has one, shows briefly over the image.
                 let name = library.selectedLens?.name.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
                 withAnimation(.smooth(duration: 0.25)) { lensNotice = name.isEmpty ? nil : (name, UUID()) }
+                if !name.isEmpty {
+                    AccessibilityNotification.Announcement(name).post()
+                }
             }
             .task(id: lensNotice?.id) {
                 guard lensNotice != nil else { return }

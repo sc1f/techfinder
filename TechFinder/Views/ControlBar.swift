@@ -5,7 +5,6 @@ import TechFinderCore
 struct ControlBar: View {
     @Environment(LibraryStore.self) private var library
     let present: (ViewfinderView.Sheet) -> Void
-    @Binding var tip: HoldTip?
     let rotation: Angle
 
     var body: some View {
@@ -26,7 +25,7 @@ struct ControlBar: View {
             // carousel when there are more than fit.
             ViewThatFits(in: .horizontal) {
                 NativeLensPicker(rotation: rotation)
-                LensCarousel(tip: $tip, rotation: rotation)
+                LensCarousel(rotation: rotation)
             }
         }
     }
@@ -109,30 +108,6 @@ private extension UIFont {
     }
 }
 
-/// A circular glass icon button whose icon turns with the phone.
-struct RoundGlassControl: View {
-    let systemImage: String
-    let rotation: Angle
-    let tip: HoldTip
-    @Binding var shownTip: HoldTip?
-    var size: CGFloat = 48
-    var isOn = false
-    let action: () -> Void
-
-    var body: some View {
-        HoldTipControl(tip: tip, shownTip: $shownTip, action: action) {
-            Image(systemName: systemImage)
-                .font(.system(size: size * 0.375, weight: .medium))
-                .foregroundStyle(isOn ? Color.accentColor : .white)
-                .rotationEffect(rotation)
-                .animation(ViewfinderView.turn, value: rotation)
-                .frame(width: size, height: size)
-        }
-        .glassSurface(Circle(), interactive: true)
-        .accessibilityAddTraits(isOn ? .isSelected : [])
-    }
-}
-
 /// Saved lenses, wide to long, on a centred glass pill that hugs them and grows from the middle.
 ///
 /// When they fit, the highlight slides to the selected lens; dragging moves a glass lens under the finger
@@ -144,7 +119,6 @@ struct RoundGlassControl: View {
 /// row's own offset back into layout and never settle.
 private struct LensCarousel: View {
     @Environment(LibraryStore.self) private var library
-    @Binding var tip: HoldTip?
     let rotation: Angle
 
     @State private var widths: [Lens.ID: CGFloat] = [:]
@@ -245,11 +219,9 @@ private struct LensCarousel: View {
     }
 
     private var items: some View {
-        let format = library.selectedFormat
-        return HStack(spacing: spacing) {
+        HStack(spacing: spacing) {
             ForEach(library.lenses) { lens in
-                let fov = FieldOfView(focalLength: lens.focalLength, format: format)
-                item(for: lens, tip: HoldTip(title: lens.displayName, detail: "\(fov.anglesLabel) · \(fov.equivalentLabel)"))
+                item(for: lens)
                     .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { width in
                         widths[lens.id] = width
                     }
@@ -258,12 +230,12 @@ private struct LensCarousel: View {
         .fixedSize()
     }
 
-    private func item(for lens: Lens, tip lensTip: HoldTip) -> some View {
+    private func item(for lens: Lens) -> some View {
         let isSelected = lens.id == library.selectedLensID
         // Turned sideways, "65mm" would be taller than the track, so only the number turns.
         let isTurned = rotation != .zero
 
-        return HoldTipControl(tip: lensTip, shownTip: $tip) {
+        return Button {
             withAnimation(settle) { library.selectedLensID = lens.id }
         } label: {
             HStack(alignment: .firstTextBaseline, spacing: 1) {
@@ -282,7 +254,10 @@ private struct LensCarousel: View {
             .padding(.horizontal, 12)
             .frame(minWidth: minItemWidth)
             .frame(height: 40)
+            .contentShape(Rectangle())
         }
+        .buttonStyle(.plain)
+        .accessibilityLabel(lens.displayName)
         .accessibilityAddTraits(isSelected ? .isSelected : [])
     }
 

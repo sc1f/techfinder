@@ -21,7 +21,6 @@
 		A53B642B1937F3BBE6264916 /* FrameOverlay.swift in Sources */ = {isa = PBXBuildFile; fileRef = 02E1E7C2C26E92316167533B /* FrameOverlay.swift */; };
 		AAC9585F0B64FD37B3E03AE2 /* TechFinderCore in Frameworks */ = {isa = PBXBuildFile; productRef = 4F3ADE5F9F9EBD2B68FDE251 /* TechFinderCore */; };
 		BFDAF99ECF19771555949878 /* SimulatedScene.swift in Sources */ = {isa = PBXBuildFile; fileRef = D8236BA655A2C43493EB68C3 /* SimulatedScene.swift */; };
-		DAC58F0B380E8635E72D78E4 /* HoldTip.swift in Sources */ = {isa = PBXBuildFile; fileRef = 79D6813D9D6BF670CBF0BFB6 /* HoldTip.swift */; };
 		E1D80B4CEC4FCCB0CC9FDEB9 /* FormatPickerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D5E41A047F1D41D66B678243 /* FormatPickerView.swift */; };
 		E522A13E91EA83540714F1AD /* ControlBar.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1FD8A5E79308384BE219F6D9 /* ControlBar.swift */; };
 /* End PBXBuildFile section */
@@ -44,7 +43,6 @@
 		2DCC5BB0DBDCEA3ADCF36DA4 /* TechFinder.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = TechFinder.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		2E18ADAFB4F9D6E439F6DA7A /* LensEditorView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LensEditorView.swift; sourceTree = "<group>"; };
 		3CC170A9DDCC0F91DDFB4774 /* CameraPreview.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CameraPreview.swift; sourceTree = "<group>"; };
-		79D6813D9D6BF670CBF0BFB6 /* HoldTip.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HoldTip.swift; sourceTree = "<group>"; };
 		88B498D23DAE3B126152E901 /* TechFinderUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TechFinderUITests.swift; sourceTree = "<group>"; };
 		9A145961DA11D916FEBF749A /* TechFinderCore */ = {isa = PBXFileReference; lastKnownFileType = folder; name = TechFinderCore; path = Packages/TechFinderCore; sourceTree = SOURCE_ROOT; };
 		A108B37B22C6CFB9940CD7EF /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
@@ -113,7 +111,6 @@
 				1FD8A5E79308384BE219F6D9 /* ControlBar.swift */,
 				D5E41A047F1D41D66B678243 /* FormatPickerView.swift */,
 				02E1E7C2C26E92316167533B /* FrameOverlay.swift */,
-				79D6813D9D6BF670CBF0BFB6 /* HoldTip.swift */,
 				2E18ADAFB4F9D6E439F6DA7A /* LensEditorView.swift */,
 				AA82ECA49E5B783C1C8E31AC /* LensLibraryView.swift */,
 				D8236BA655A2C43493EB68C3 /* SimulatedScene.swift */,
@@ -276,7 +273,6 @@
 				E1D80B4CEC4FCCB0CC9FDEB9 /* FormatPickerView.swift in Sources */,
 				A53B642B1937F3BBE6264916 /* FrameOverlay.swift in Sources */,
 				365226B08C393ABE6A2F38F4 /* Glass.swift in Sources */,
-				DAC58F0B380E8635E72D78E4 /* HoldTip.swift in Sources */,
 				722AA208955D49DB568EBAF9 /* LensEditorView.swift in Sources */,
 				473396F7A738F65E02D47B64 /* LensLibraryView.swift in Sources */,
 				7910D696A199ADEB1C98F76B /* Panel.swift in Sources */,

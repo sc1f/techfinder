@@ -6,27 +6,20 @@ final class TechFinderUITests: XCTestCase {
         continueAfterFailure = false
     }
 
-    func testMenuOpensTogglesGridAndStaysResponsive() {
+    func testGridToggleStaysResponsive() {
         let app = XCUIApplication()
         app.launch()
 
-        let menu = app.buttons["menu"]
-        XCTAssertTrue(menu.waitForExistence(timeout: 15), "Menu button should appear")
-        menu.tap()
-
-        let grid = app.buttons["Grid"].firstMatch
-        XCTAssertTrue(grid.waitForExistence(timeout: 5), "Menu should open and show Grid")
-        attachScreenshot(of: app, named: "menu-open")
+        let grid = app.buttons["gridButton"]
+        XCTAssertTrue(grid.waitForExistence(timeout: 15), "Grid button should appear")
+        let reset = app.buttons["resetFrameButton"]
+        XCTAssertTrue(reset.exists)
+        XCTAssertFalse(reset.isEnabled, "Reset is disabled until the frame size changes")
 
         grid.tap()
-        XCTAssertTrue(menu.waitForExistence(timeout: 5))
-        XCTAssertTrue(menu.isHittable, "The viewfinder should respond after the menu closes")
-        attachScreenshot(of: app, named: "menu-closed-grid-toggled")
-
-        // Opening and closing again proves the app is still responsive.
-        menu.tap()
-        XCTAssertTrue(app.buttons["Grid"].firstMatch.waitForExistence(timeout: 5))
-        app.buttons["Grid"].firstMatch.tap()
+        attachScreenshot(of: app, named: "grid-toggled")
+        grid.tap()
+        XCTAssertTrue(grid.isHittable, "The viewfinder should stay responsive")
     }
 
     func testLensAndFormatButtonsOpenSheets() {

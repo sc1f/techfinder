@@ -3,7 +3,7 @@ import TechFinderCore
 
 /// The main screen: the live camera image with the taking frame, the menu and setup buttons on top, and
 /// the lens carousel below. Tap the image to focus and meter there; pinch to show more or less of the
-/// scene around the frame; press and hold a control for a tip.
+/// scene around the frame.
 struct ViewfinderView: View {
     @Environment(LibraryStore.self) private var library
     @Environment(\.scenePhase) private var scenePhase
@@ -13,7 +13,6 @@ struct ViewfinderView: View {
     @State private var sheet: Sheet?
     /// Shown as a rotated card in landscape, where system sheets would appear sideways.
     @State private var panel: Sheet?
-    @State private var tip: HoldTip?
     @State private var focusMarker: FocusMarker?
     /// Exposure compensation in stops for the current focus point, set by dragging after a tap.
     @State private var exposureBias: Float = 0
@@ -57,7 +56,7 @@ struct ViewfinderView: View {
             Color.black.ignoresSafeArea()
             viewfinder(solution: solution)
             controls(solution: solution)
-            sideReadout(solution: solution, isSimulated: isSimulated)
+            sideSetup(solution: solution, isSimulated: isSimulated)
             permissionMessage
             if let panel {
                 RotatedPanel(rotation: orientation.rotation, close: closePanel) {
@@ -100,56 +99,27 @@ struct ViewfinderView: View {
 
     private func controls(solution: FramingSolution?) -> some View {
         VStack(spacing: 0) {
-            TopBar(lens: library.selectedLens, format: library.selectedFormat, solution: solution,
-                   showsSetup: !orientation.isLandscape, rotation: orientation.rotation,
-                   showsGrid: $showsGrid, canResetFill: abs(fill - Framing.defaultFill) > 0.001,
-                   resetFill: { withAnimation(.smooth) { fill = Framing.defaultFill } },
-                   present: present, tip: $tip)
+            SetupBar(lens: library.selectedLens, format: library.selectedFormat,
+                     isClipped: solution?.isClipped == true, isSimulated: camera.status == .unavailable,
+                     present: present)
                 .padding(.top, 8)
-            if let tip, tip.placement == .top {
-                HoldTipBubble(tip: tip)
-                    .padding(.top, 12)
-                    .transition(.opacity.combined(with: .scale(scale: 0.9, anchor: .top)))
-            }
+                .opacity(orientation.isLandscape ? 0 : 1)
+                .allowsHitTesting(!orientation.isLandscape)
             Spacer()
-            if let tip, tip.placement == .bottom {
-                HoldTipBubble(tip: tip)
-                    .rotationEffect(orientation.rotation)
-                    .padding(.bottom, orientation.isLandscape ? 60 : 12)
-                    .transition(.opacity.combined(with: .scale(scale: 0.9, anchor: .bottom)))
-            }
-            ControlBar(present: present, tip: $tip, rotation: orientation.rotation)
+            ToolRow(rotation: orientation.rotation, showsGrid: $showsGrid,
+                    canResetFill: abs(fill - Framing.defaultFill) > 0.001,
+                    resetFill: { withAnimation(.smooth) { fill = Framing.defaultFill } })
+                .padding(.bottom, 12)
+            ControlBar(present: present, rotation: orientation.rotation)
                 .padding(.bottom, 8)
         }
         .padding(.horizontal, 16)
-        .overlay {
-            menu
-        }
-    }
-
-    /// The menu sits in the viewer's top-left corner and slides there as the phone turns: the screen's
-    /// top-left in portrait, top-right when turned left, bottom-left (above the lenses) when turned right.
-    private var menu: some View {
-        let alignment: Alignment = switch orientation.hold {
-        case .portrait: .topLeading
-        case .landscapeLeft: .topTrailing
-        case .landscapeRight: .bottomLeading
-        }
-        let insets = EdgeInsets(top: 8, leading: 16, bottom: orientation.hold == .landscapeRight ? 8 + 48 + 16 : 8,
-                                trailing: 16)
-
-        return MenuButton(rotation: orientation.rotation, showsGrid: $showsGrid,
-                          canResetFill: abs(fill - Framing.defaultFill) > 0.001,
-                          resetFill: { withAnimation(.smooth) { fill = Framing.defaultFill } })
-            .padding(insets)
-            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: alignment)
     }
 
     // MARK: - Behaviour
 
     private func lifecycle(_ content: some View, solution: FramingSolution?) -> some View {
         content
-            .animation(.smooth(duration: 0.2), value: tip)
             .animation(Self.turn, value: orientation.hold)
             .statusBarHidden()
             .persistentSystemOverlays(.hidden)
@@ -165,11 +135,6 @@ struct ViewfinderView: View {
                 try? await Task.sleep(for: .seconds(3))
                 guard !Task.isCancelled, exposureDragStart == nil else { return }
                 withAnimation(.easeOut(duration: 0.4)) { focusMarker = nil }
-            }
-            .task(id: tip) {
-                guard tip != nil else { return }
-                try? await Task.sleep(for: .seconds(2))
-                tip = nil
             }
             .task {
                 await camera.start()
@@ -205,7 +170,6 @@ struct ViewfinderView: View {
         content
             .sensoryFeedback(.selection, trigger: library.selectedLensID)
             .sensoryFeedback(.selection, trigger: library.selectedFormatID)
-            .sensoryFeedback(trigger: tip) { _, new in new == nil ? nil : .impact(weight: .light) }
             .sensoryFeedback(trigger: sheet ?? panel) { _, new in new == nil ? nil : .impact(weight: .light) }
     }
 
@@ -245,24 +209,32 @@ struct ViewfinderView: View {
         }
     }
 
-    /// In landscape the readout runs along whichever screen edge is currently "up" for the viewer.
-    /// Tap it to open the lenses.
+    /// In landscape the lens and format pills run along whichever screen edge is currently "up" for the
+    /// viewer, turned to read along it, with the warning tag on the inner side.
     @ViewBuilder
-    private func sideReadout(solution: FramingSolution?, isSimulated: Bool) -> some View {
+    private func sideSetup(solution: FramingSolution?, isSimulated: Bool) -> some View {
         if orientation.isLandscape {
+            let isClipped = solution?.isClipped == true
             GeometryReader { geometry in
-                let inset: CGFloat = 12 + 24 // edge margin + half the readout's height
+                // Distance from the screen edge to the centre of the turned block.
+                let depth = GlassButtonMetrics.pillHeight + (isClipped ? 8 + WarningTag.height : 0)
+                let inset = 12 + depth / 2
                 let x = orientation.hold == .landscapeLeft ? geometry.size.width - inset : inset
-                Button {
-                    present(library.selectedLens == nil ? .newLens : .lenses)
-                } label: {
-                    LensReadout(lens: library.selectedLens, format: library.selectedFormat, solution: solution,
-                                isSimulated: isSimulated, showsFormat: true, showsWarning: true)
-                        .padding(.horizontal, 16)
-                        .padding(.vertical, 2)
+
+                VStack(spacing: 8) {
+                    HStack(spacing: 8) {
+                        LensPillButton(lens: library.selectedLens, format: library.selectedFormat,
+                                       isSimulated: isSimulated) {
+                            present(library.selectedLens == nil ? .newLens : .lenses)
+                        }
+                        FormatPillButton(format: library.selectedFormat) {
+                            present(.formats)
+                        }
+                    }
+                    if isClipped {
+                        WarningTag()
+                    }
                 }
-                .buttonStyle(.plain)
-                .glassSurface(RoundedRectangle(cornerRadius: 24, style: .continuous), interactive: true)
                 .fixedSize()
                 .rotationEffect(orientation.rotation)
                 .position(x: x, y: geometry.size.height / 2)
@@ -398,185 +370,171 @@ private struct FocusSquare: View {
 
 // MARK: - Top bar
 
-/// The menu at the leading edge, the lens button centred on screen and the format button to its right.
-/// When the setup is wider than the phone can see, a warning tag hangs under the lens button.
-private struct TopBar: View {
+/// The lens and format pills, centred. When the setup is wider than the phone can see, a warning tag
+/// hangs underneath.
+private struct SetupBar: View {
     let lens: Lens?
     let format: CaptureFormat
-    let solution: FramingSolution?
-    let showsSetup: Bool
-    let rotation: Angle
-    @Binding var showsGrid: Bool
-    let canResetFill: Bool
-    let resetFill: () -> Void
+    let isClipped: Bool
+    let isSimulated: Bool
     let present: (ViewfinderView.Sheet) -> Void
-    @Binding var tip: HoldTip?
-
-    private let height: CGFloat = 48
 
     var body: some View {
-        TopBarLayout(spacing: 8) {
-            // Room for the menu, which is drawn by the viewfinder so it can slide between corners as
-            // the phone turns.
-            Color.clear
-                .frame(width: MenuButton.size.width, height: MenuButton.size.height)
-
-            HoldTipControl(tip: HoldTip(title: "Format", detail: "Tap to choose the back or film format", placement: .top),
-                           shownTip: $tip) {
-                present(.formats)
-            } label: {
-                Text(format.name)
-                    .font(.footnote.weight(.semibold))
-                    .lineLimit(1)
-                    .padding(.horizontal, 16)
-                    .frame(height: height)
+        VStack(spacing: 8) {
+            HStack(spacing: 8) {
+                LensPillButton(lens: lens, format: format, isSimulated: isSimulated) {
+                    present(lens == nil ? .newLens : .lenses)
+                }
+                FormatPillButton(format: format) {
+                    present(.formats)
+                }
+                .fixedSize()
             }
-            .glassSurface(Capsule(), interactive: true)
-            .opacity(showsSetup ? 1 : 0)
-            .allowsHitTesting(showsSetup)
-            .accessibilityIdentifier("formatButton")
-
-            HoldTipControl(tip: HoldTip(title: "Lenses", detail: "Tap to add, edit and choose lenses", placement: .top),
-                           shownTip: $tip) {
-                present(lens == nil ? .newLens : .lenses)
-            } label: {
-                LensReadout(lens: lens, format: format, solution: solution, isSimulated: false,
-                            showsFormat: false, showsWarning: false)
-                    .padding(.horizontal, 16)
-                    .frame(height: height)
-            }
-            .glassSurface(Capsule(), interactive: true)
-            .opacity(showsSetup ? 1 : 0)
-            .allowsHitTesting(showsSetup)
-            .accessibilityIdentifier("lensButton")
-
-            if showsSetup, solution?.isClipped == true {
-                Text("Wider than the iPhone can see")
-                    .font(.caption2.weight(.semibold))
-                    .foregroundStyle(.orange)
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 5)
-                    .glassSurface(Capsule())
+            if isClipped {
+                WarningTag()
                     .transition(.opacity.combined(with: .scale(scale: 0.9, anchor: .top)))
             }
         }
-        .animation(.smooth, value: solution?.isClipped == true)
+        .animation(.smooth, value: isClipped)
     }
-
 }
 
-/// The menu: grid and frame options now; room for the light meter and settings later.
-private struct MenuButton: View {
+// MARK: - Tools
+
+/// Frame tools above the lens selector, centred: grid and reset frame size for now; the light meter
+/// and settings will join them.
+private struct ToolRow: View {
     let rotation: Angle
     @Binding var showsGrid: Bool
     let canResetFill: Bool
     let resetFill: () -> Void
 
-    /// Outer size, matching the lens and format pills. The glass button style adds its own padding
-    /// (`GlassButtonMetrics.padding`) around the label.
-    static let size = CGSize(width: 64, height: 48)
-
-    @State private var presses = 0
-
     var body: some View {
-        Menu {
-            Toggle(isOn: $showsGrid) {
-                Label("Grid", systemImage: "grid")
+        HStack(spacing: 10) {
+            ToolButton(systemImage: "grid", label: "Grid", isOn: showsGrid, rotation: rotation) {
+                showsGrid.toggle()
             }
-            Button(action: resetFill) {
-                Label("Reset Frame Size", systemImage: "arrow.counterclockwise")
+            .accessibilityIdentifier("gridButton")
+            ToolButton(systemImage: "arrow.counterclockwise", label: "Reset Frame Size", rotation: rotation) {
+                resetFill()
             }
             .disabled(!canResetFill)
+            .accessibilityIdentifier("resetFrameButton")
+        }
+    }
+}
+
+/// A glass pill with an icon that turns with the phone, and a firm haptic when pressed.
+private struct ToolButton: View {
+    let systemImage: String
+    let label: String
+    var isOn = false
+    let rotation: Angle
+    let action: () -> Void
+
+    @Environment(\.isEnabled) private var isEnabled
+    @State private var presses = 0
+
+    private static let width: CGFloat = 64
+
+    var body: some View {
+        Button {
+            presses += 1
+            action()
         } label: {
-            Image(systemName: "line.3.horizontal")
-                .font(.system(size: 18, weight: .medium))
-                .foregroundStyle(.white)
+            Image(systemName: systemImage)
+                .font(.system(size: 17, weight: .medium))
+                .foregroundStyle(isOn ? Color.accentColor : .white)
+                .opacity(isEnabled ? 1 : 0.35)
                 .rotationEffect(rotation)
                 .animation(ViewfinderView.turn, value: rotation)
-                .frame(width: Self.size.width - GlassButtonMetrics.padding.leading - GlassButtonMetrics.padding.trailing,
-                       height: Self.size.height - GlassButtonMetrics.padding.top - GlassButtonMetrics.padding.bottom)
-                .contentShape(Capsule())
+                .frame(width: Self.width - GlassButtonMetrics.padding.leading - GlassButtonMetrics.padding.trailing,
+                       height: GlassButtonMetrics.pillLabelHeight)
         }
-        // The system glass button style, so iOS 26 can morph the menu out of the button itself.
         .glassButtonStyle(Capsule())
-        .simultaneousGesture(TapGesture().onEnded { presses += 1 })
         .sensoryFeedback(.impact(weight: .medium, intensity: 1), trigger: presses)
-        .accessibilityLabel("Menu")
-        .accessibilityIdentifier("menu")
+        .accessibilityLabel(label)
+        .accessibilityAddTraits(isOn ? .isSelected : [])
     }
 }
 
-/// Places the top bar: the menu at the leading edge, the lens button centred on screen with the format
-/// button beside it on the right. If the format button would run off the edge, both shift left; if
-/// there still isn't room, the lens button narrows. An optional fourth view hangs centred under the lens.
-private struct TopBarLayout: Layout {
-    var spacing: CGFloat
+/// The lens name and its angle of view on the format, as a glass pill button. Opens the lenses.
+private struct LensPillButton: View {
+    let lens: Lens?
+    let format: CaptureFormat
+    let isSimulated: Bool
+    let action: () -> Void
 
-    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
-        let row = subviews.prefix(3).map { $0.sizeThatFits(.unspecified).height }.max() ?? 0
-        let extra = subviews.count > 3 ? spacing + subviews[3].sizeThatFits(.unspecified).height : 0
-        return CGSize(width: proposal.width ?? 0, height: row + extra)
-    }
-
-    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
-        guard subviews.count >= 3 else { return }
-        let menu = subviews[0].sizeThatFits(.unspecified)
-        let format = subviews[1].sizeThatFits(.unspecified)
-        let lensIdeal = subviews[2].sizeThatFits(.unspecified)
-        let row = max(menu.height, format.height, lensIdeal.height)
-        let midY = bounds.minY + row / 2
-
-        subviews[0].place(at: CGPoint(x: bounds.minX, y: midY), anchor: .leading, proposal: ProposedViewSize(menu))
-
-        let earliestLens = bounds.minX + menu.width + spacing
-        let latestLensEnd = bounds.maxX - spacing - format.width
-        let lensWidth = min(lensIdeal.width, latestLensEnd - earliestLens)
-        let lensX = max(min(bounds.midX - lensWidth / 2, latestLensEnd - lensWidth), earliestLens)
-        subviews[2].place(at: CGPoint(x: lensX, y: midY), anchor: .leading,
-                          proposal: ProposedViewSize(width: lensWidth, height: lensIdeal.height))
-        subviews[1].place(at: CGPoint(x: lensX + lensWidth + spacing, y: midY), anchor: .leading,
-                          proposal: ProposedViewSize(format))
-
-        if subviews.count > 3 {
-            let tag = subviews[3].sizeThatFits(.unspecified)
-            subviews[3].place(at: CGPoint(x: lensX + lensWidth / 2, y: bounds.minY + row + spacing), anchor: .top,
-                              proposal: ProposedViewSize(tag))
+    var body: some View {
+        Button(action: action) {
+            LensReadout(lens: lens, format: format, isSimulated: isSimulated)
+                .padding(.horizontal, 4)
+                .frame(height: GlassButtonMetrics.pillLabelHeight)
         }
+        .glassButtonStyle(Capsule())
+        .accessibilityHint("Add, edit and choose lenses")
+        .accessibilityIdentifier("lensButton")
     }
 }
 
-/// Lens name (optionally with the format), its angle of view on the format and, optionally, a warning
-/// when the phone can't see that wide.
+/// The format name as a glass pill button. Opens the format picker.
+private struct FormatPillButton: View {
+    let format: CaptureFormat
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            Text(format.name)
+                .font(.footnote.weight(.semibold))
+                .foregroundStyle(.white)
+                .lineLimit(1)
+                .padding(.horizontal, 4)
+                .frame(height: GlassButtonMetrics.pillLabelHeight)
+        }
+        .glassButtonStyle(Capsule())
+        .accessibilityLabel("Format, \(format.name)")
+        .accessibilityIdentifier("formatButton")
+    }
+}
+
+/// Shown under the lens pill when the setup is wider than the phone's camera can see.
+private struct WarningTag: View {
+    static let height: CGFloat = 22
+
+    var body: some View {
+        Text("Wider than the iPhone can see")
+            .font(.caption2.weight(.semibold))
+            .foregroundStyle(.orange)
+            .padding(.horizontal, 12)
+            .frame(height: Self.height)
+            .glassSurface(Capsule())
+    }
+}
+
+/// Lens name and its angle of view on the format.
 private struct LensReadout: View {
     let lens: Lens?
     let format: CaptureFormat
-    let solution: FramingSolution?
     let isSimulated: Bool
-    let showsFormat: Bool
-    let showsWarning: Bool
 
     var body: some View {
         VStack(spacing: 1) {
             if let lens {
                 let fov = FieldOfView(focalLength: lens.focalLength, format: format)
-                Text(showsFormat ? "\(lens.displayName) · \(format.name)" : lens.displayName)
+                Text(lens.displayName)
                     .font(.footnote.weight(.semibold))
+                    .foregroundStyle(.white)
                 Text("\(fov.anglesLabel) · \(fov.equivalentLabel)\(isSimulated ? " · Simulated" : "")")
                     .font(.caption2.monospacedDigit())
                     .foregroundStyle(.secondary)
-                if showsWarning, solution?.isClipped == true {
-                    Text("Wider than the iPhone can see")
-                        .font(.caption2.weight(.medium))
-                        .foregroundStyle(.orange)
-                }
             } else {
                 Text("Add a lens")
                     .font(.footnote.weight(.semibold))
+                    .foregroundStyle(.white)
             }
         }
         .lineLimit(1)
         .multilineTextAlignment(.center)
-        .padding(.vertical, 6)
         .contentTransition(.numericText())
         .animation(.smooth, value: lens)
         .animation(.smooth, value: format)

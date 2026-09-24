@@ -7,6 +7,10 @@ import SwiftUI
 /// labels can be sized to give an exact outer size.
 enum GlassButtonMetrics {
     static let padding = EdgeInsets(top: 7, leading: 12, bottom: 7, trailing: 12)
+    /// Outer height of the top-bar pills.
+    static let pillHeight: CGFloat = 48
+    /// Label height that gives a `pillHeight` button once the style's padding is added.
+    static var pillLabelHeight: CGFloat { pillHeight - padding.top - padding.bottom }
 }
 
 extension View {
@@ -55,10 +59,40 @@ extension View {
             buttonStyle(.glass)
                 .buttonBorderShape(shape is Circle ? .circle : .capsule)
         } else {
-            buttonStyle(.plain).padding(GlassButtonMetrics.padding).solidSurface(shape, tint: nil)
+            buttonStyle(SolidButtonStyle(shape: shape))
         }
         #else
-        buttonStyle(.plain).padding(GlassButtonMetrics.padding).solidSurface(shape, tint: nil)
+        buttonStyle(SolidButtonStyle(shape: shape))
         #endif
+    }
+
+    /// The background of a card that stands in for a sheet: glass on iOS 26 like the system sheets,
+    /// solid dark elsewhere.
+    @ViewBuilder
+    func panelBackground<S: Shape>(_ shape: S) -> some View {
+        #if compiler(>=6.2)
+        if #available(iOS 26.0, *) {
+            glassEffect(.regular, in: shape)
+        } else {
+            background(Color(white: 0.08), in: shape)
+        }
+        #else
+        background(Color(white: 0.08), in: shape)
+        #endif
+    }
+}
+
+/// Stands in for the glass button style where Liquid Glass isn't available: the same padding on a solid
+/// dark shape, dimming while pressed.
+private struct SolidButtonStyle<S: Shape>: ButtonStyle {
+    let shape: S
+
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .padding(GlassButtonMetrics.padding)
+            .background(shape.fill(Color(white: 0.13)))
+            .overlay(shape.stroke(.white.opacity(0.12), lineWidth: 0.5))
+            .contentShape(shape)
+            .opacity(configuration.isPressed ? 0.7 : 1)
     }
 }

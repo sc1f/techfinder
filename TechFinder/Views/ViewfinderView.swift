@@ -20,6 +20,8 @@ struct ViewfinderView: View {
     @State private var movementDragStart: Movement?
     /// Bumped when a movement stops at the image circle or the camera's limit.
     @State private var movementStops = 0
+    /// The screen's safe area. Full-screen layers ignore it, so it is read from the screen's own frame.
+    @State private var safeArea = EdgeInsets()
 
     enum Sheet: String, Identifiable {
         case lenses, formats, newLens, settings
@@ -110,12 +112,13 @@ struct ViewfinderView: View {
                 .zIndex(1)
             }
         }
+        .onGeometryChange(for: EdgeInsets.self) { $0.safeAreaInsets } action: { safeArea = $0 }
     }
 
 
     private func viewfinder(solution: FramingSolution?, movement: MovementInfo?) -> some View {
         GeometryReader { geometry in
-            let imageRect = Self.imageRect(in: geometry.size, aspectRatio: camera.optics.aspectRatio)
+            let imageRect = screenLayout(geometry).image
             let mapping = movement.map {
                 MovementMapping.make(layout: $0.layout, imageSize: imageRect.size, showsOverview: movements.showsOverview)
             }
@@ -148,6 +151,8 @@ struct ViewfinderView: View {
             .frame(width: imageRect.width, height: imageRect.height)
             .clipped()
             .contentShape(Rectangle())
+            .accessibilityElement(children: .contain)
+            .accessibilityIdentifier("viewfinderImage")
             .onTapGesture(count: 2) {
                 if let movement { move(movements.axis, to: 0, info: movement) }
             }
@@ -158,52 +163,67 @@ struct ViewfinderView: View {
         .gesture(pinchToAdjustFill)
     }
 
+    /// Portrait: the tools across the top; at the bottom, within thumb reach, the movement controls (or
+    /// a warning) above the meter, and the lens row under it. Held sideways, the tools and the lens row
+    /// stay put with their icons turned, and the meter and movements move to `sideBlocks`.
     private func controls(solution: FramingSolution?, exposure: ExposureSolution, movement: MovementInfo?) -> some View {
         VStack(spacing: 0) {
-            topBlock(exposure: exposure, rotation: orientation.rotation)
+            ToolRow(rotation: orientation.rotation, showsGrid: $showsGrid, showsMovements: movementsToggle,
+                    canResetFill: abs(fill - Framing.defaultFill) > 0.001,
+                    resetFill: { withAnimation(.smooth) { fill = Framing.defaultFill } },
+                    openSettings: { present(.settings) })
                 .padding(.top, 8)
-                .opacity(orientation.isLandscape ? 0 : 1)
-                .allowsHitTesting(!orientation.isLandscape)
             Spacer()
-            setupBlock(solution: solution, movement: movement)
-                .padding(.bottom, 12)
-                .opacity(orientation.isLandscape ? 0 : 1)
-                .allowsHitTesting(!orientation.isLandscape)
+            VStack(spacing: 12) {
+                setupBlock(solution: solution, movement: movement)
+                meterBar(exposure: exposure, isStacked: false)
+            }
+            .opacity(orientation.isLandscape ? 0 : 1)
+            .allowsHitTesting(!orientation.isLandscape)
+            .accessibilityHidden(orientation.isLandscape)
+            .padding(.bottom, 12)
             ControlBar(present: present, rotation: orientation.rotation)
                 .padding(.bottom, 8)
         }
         .padding(.horizontal, 16)
     }
 
-    /// The light meter with the tools under it, in portrait. Landscape uses `meterColumn` instead.
-    private func topBlock(exposure: ExposureSolution, rotation: Angle) -> some View {
-        VStack(spacing: 8) {
-            MeterBar(settings: exposureSettings, solution: exposure, limits: library.exposureLimits,
-                     ev100: meteredEV, readingIsClipped: camera.meterIsClipped,
-                     step: library.meterStep)
-            ToolRow(rotation: rotation, showsGrid: $showsGrid, showsMovements: movementsToggle,
-                    canResetFill: abs(fill - Framing.defaultFill) > 0.001,
-                    resetFill: { withAnimation(.smooth) { fill = Framing.defaultFill } },
-                    openSettings: { present(.settings) })
-        }
+    private func meterBar(exposure: ExposureSolution, isStacked: Bool) -> some View {
+        MeterBar(settings: exposureSettings, solution: exposure, limits: library.exposureLimits,
+                 ev100: meteredEV, readingIsClipped: camera.meterIsClipped, step: library.meterStep,
+                 isStacked: isStacked, listRotation: isStacked ? orientation.rotation : .zero)
     }
 
-    /// The lens and format pills, with the warning above them when the setup is too wide. With movements
-    /// on, the movement controls take their place.
+    /// The movement controls when movements are on, with a warning above them when the frame reaches
+    /// past what the phone can see; otherwise that warning when the setup is too wide.
     @ViewBuilder
     private func setupBlock(solution: FramingSolution?, movement: MovementInfo?) -> some View {
         if let movement {
-            MovementBar(state: $movements, margin: movement.margin,
-                        imageCircle: movement.imageCircle.map { ($0.diameter, movement.aperture, $0.isEstimate) }) { delta in
-                move(movements.axis, to: movements.movement[movements.axis] + delta, info: movement)
+            VStack(spacing: 8) {
+                if movement.layout.isBeyondCamera {
+                    WarningTag()
+                        .transition(.opacity.combined(with: .scale(scale: 0.9, anchor: .bottom)))
+                }
+                MovementBar(state: $movements, margin: movement.margin,
+                            imageCircle: movement.imageCircle.map { ($0.diameter, movement.aperture, $0.isEstimate) }) { delta in
+                    move(movements.axis, to: movements.movement[movements.axis] + delta, info: movement)
+                }
             }
+            .animation(.smooth, value: movement.layout.isBeyondCamera)
             .transition(.opacity)
-        } else {
-            SetupBar(lens: library.selectedLens, format: library.selectedFormat,
-                     isClipped: solution?.isClipped == true, isSimulated: camera.status == .unavailable,
-                     present: present)
-            .transition(.opacity)
+        } else if solution?.isClipped == true {
+            WarningTag()
+                .transition(.opacity.combined(with: .scale(scale: 0.9, anchor: .bottom)))
         }
+    }
+
+    /// Height of `setupBlock`, for placing it turned in landscape.
+    private func setupBlockHeight(solution: FramingSolution?, movement: MovementInfo?) -> CGFloat {
+        let tag = WarningTag.height
+        if let movement {
+            return GlassButtonMetrics.pillHeight + (movement.layout.isBeyondCamera ? 8 + tag : 0)
+        }
+        return solution?.isClipped == true ? tag : 0
     }
 
     private var movementsToggle: Binding<Bool> {
@@ -258,6 +278,10 @@ struct ViewfinderView: View {
             // `-TFMovements YES -TFRise 10 -TFShift 5 -TFOverview YES` opens movements.
             .task {
                 let defaults = UserDefaults.standard
+                // `-TFLens 23` picks the lens with that focal length.
+                if let lens = library.lenses.first(where: { $0.focalLength == defaults.double(forKey: "TFLens") }) {
+                    library.selectedLensID = lens.id
+                }
                 if defaults.double(forKey: "TFImageCircle") > 0, var lens = library.selectedLens {
                     lens.imageCircle = [ImageCirclePoint(diameter: defaults.double(forKey: "TFImageCircle"), fNumber: 11)]
                     library.save(lens)
@@ -328,49 +352,30 @@ struct ViewfinderView: View {
         }
     }
 
-    /// In landscape the meter and tools stand in a column at the viewer's side and the lens and format
-    /// pills run along the viewer's bottom edge, each turned to read upright.
+    /// Held sideways, the meter stands in a column at the viewer's side, in the band between the camera
+    /// image and the lens row (the phone's bottom), and the movement controls run along the viewer's
+    /// bottom edge; both turned to read upright.
     @ViewBuilder
     private func sideBlocks(solution: FramingSolution?, exposure: ExposureSolution, movement: MovementInfo?) -> some View {
         if orientation.isLandscape {
-            let isClipped = solution?.isClipped == true
-            let pill = GlassButtonMetrics.pillHeight
             GeometryReader { geometry in
-                // Distance from the screen edge to the centre of the turned setup block.
-                let bottomInset = 12 + (pill + (isClipped ? 8 + WarningTag.height : 0)) / 2
-                let turnedLeft = orientation.hold == .landscapeLeft
-
-                // The meter and tools stand in a column at the viewer's side, in the band above the
-                // camera image (the phone's top), clear of the Dynamic Island.
-                let imageTop = Self.imageRect(in: geometry.size, aspectRatio: camera.optics.aspectRatio).minY
-                let columnWidth = ToolRow.stackedWidth
-                meterColumn(exposure: exposure)
-                    .frame(width: columnWidth)
+                let layout = screenLayout(geometry)
+                meterBar(exposure: exposure, isStacked: true)
+                    .frame(width: layout.columnWidth)
                     .fixedSize()
                     .rotationEffect(orientation.rotation)
-                    .position(x: geometry.size.width / 2, y: max(imageTop - 10 - columnWidth / 2, 50 + columnWidth / 2))
+                    .position(x: geometry.size.width / 2, y: layout.columnCenterY)
 
+                // Distance from the screen edge to the centre of the turned block.
+                let inset = 12 + setupBlockHeight(solution: solution, movement: movement) / 2
+                let turnedLeft = orientation.hold == .landscapeLeft
                 setupBlock(solution: solution, movement: movement)
                     .fixedSize()
                     .rotationEffect(orientation.rotation)
-                    .position(x: turnedLeft ? bottomInset : geometry.size.width - bottomInset,
-                              y: geometry.size.height / 2)
+                    .position(x: turnedLeft ? inset : geometry.size.width - inset, y: geometry.size.height / 2)
             }
             .ignoresSafeArea()
             .transition(.opacity)
-        }
-    }
-
-    /// Landscape: shutter, aperture and ISO stacked, then the tools two by two.
-    private func meterColumn(exposure: ExposureSolution) -> some View {
-        VStack(spacing: 12) {
-            MeterBar(settings: exposureSettings, solution: exposure, limits: library.exposureLimits,
-                     ev100: meteredEV, readingIsClipped: camera.meterIsClipped,
-                     step: library.meterStep, isStacked: true, listRotation: orientation.rotation)
-            ToolRow(rotation: .zero, showsGrid: $showsGrid, showsMovements: movementsToggle,
-                    canResetFill: abs(fill - Framing.defaultFill) > 0.001,
-                    resetFill: { withAnimation(.smooth) { fill = Framing.defaultFill } },
-                    openSettings: { present(.settings) }, isStacked: true)
         }
     }
 
@@ -386,16 +391,10 @@ struct ViewfinderView: View {
         }
     }
 
-    /// The camera image, upright and fitted to the screen width without cropping, centred vertically.
-    static func imageRect(in container: CGSize, aspectRatio: Double) -> CGRect {
-        guard container.width > 0, container.height > 0 else { return .zero }
-        let portraitAspect = 1 / aspectRatio // width / height
-        var size = CGSize(width: container.width, height: container.width / portraitAspect)
-        if size.height > container.height {
-            size = CGSize(width: container.height * portraitAspect, height: container.height)
-        }
-        return CGRect(x: (container.width - size.width) / 2, y: (container.height - size.height) / 2,
-                      width: size.width, height: size.height)
+    /// The camera image and the landscape column for this screen. `geometry` spans the whole screen.
+    private func screenLayout(_ geometry: GeometryProxy) -> ScreenLayout {
+        ScreenLayout.make(screen: geometry.size, safeTop: safeArea.top, safeBottom: safeArea.bottom,
+                          aspectRatio: camera.optics.aspectRatio)
     }
 
     /// Where the spot meter reads, on screen and on the sensor: a tapped point, else the moved frame's
@@ -478,41 +477,10 @@ struct ViewfinderView: View {
     }
 }
 
-// MARK: - Top bar
-
-/// The lens and format pills, centred. When the setup is wider than the phone can see, a warning tag
-/// sits above them.
-private struct SetupBar: View {
-    let lens: Lens?
-    let format: CaptureFormat
-    let isClipped: Bool
-    let isSimulated: Bool
-    let present: (ViewfinderView.Sheet) -> Void
-
-    var body: some View {
-        VStack(spacing: 8) {
-            if isClipped {
-                WarningTag()
-                    .transition(.opacity.combined(with: .scale(scale: 0.9, anchor: .bottom)))
-            }
-            HStack(spacing: 8) {
-                LensPillButton(lens: lens, format: format, isSimulated: isSimulated) {
-                    present(lens == nil ? .newLens : .lenses)
-                }
-                FormatPillButton(format: format) {
-                    present(.formats)
-                }
-                .fixedSize()
-            }
-        }
-        .animation(.smooth, value: isClipped)
-    }
-}
-
 // MARK: - Tools
 
-/// Tools under the light meter: reset frame size at the leading edge, grid and movements in the middle,
-/// settings at the trailing edge.
+/// Tools across the top of the screen: reset frame size at the leading edge, grid and movements in the
+/// middle, settings at the trailing edge.
 private struct ToolRow: View {
     let rotation: Angle
     @Binding var showsGrid: Bool
@@ -520,34 +488,15 @@ private struct ToolRow: View {
     let canResetFill: Bool
     let resetFill: () -> Void
     let openSettings: () -> Void
-    /// Two by two, for the landscape column: grid and movements, then reset and settings.
-    var isStacked = false
-
-    static let spacing: CGFloat = 8
-    /// Two tool buttons side by side; the landscape column is this wide.
-    static let stackedWidth = ToolButton.width * 2 + spacing
 
     var body: some View {
-        if isStacked {
-            VStack(spacing: Self.spacing) {
-                HStack(spacing: Self.spacing) {
-                    grid
-                    movements
-                }
-                HStack(spacing: Self.spacing) {
-                    reset
-                    settings
-                }
-            }
-        } else {
-            HStack(spacing: 10) {
-                reset
-                Spacer(minLength: 0)
-                grid
-                movements
-                Spacer(minLength: 0)
-                settings
-            }
+        HStack(spacing: 10) {
+            reset
+            Spacer(minLength: 0)
+            grid
+            movements
+            Spacer(minLength: 0)
+            settings
         }
     }
 
@@ -593,7 +542,7 @@ private struct ToolButton: View {
     @Environment(\.isEnabled) private var isEnabled
     @State private var presses = 0
 
-    static let width: CGFloat = 56
+    private static let width: CGFloat = 56
     /// Matches the meter pills above.
     private static let height: CGFloat = MeterBar.height
 
@@ -618,46 +567,7 @@ private struct ToolButton: View {
     }
 }
 
-/// The lens name and its angle of view on the format, as a glass pill button. Opens the lenses.
-private struct LensPillButton: View {
-    let lens: Lens?
-    let format: CaptureFormat
-    let isSimulated: Bool
-    let action: () -> Void
-
-    var body: some View {
-        Button(action: action) {
-            LensReadout(lens: lens, format: format, isSimulated: isSimulated)
-                .padding(.horizontal, 4)
-                .frame(height: GlassButtonMetrics.pillLabelHeight)
-        }
-        .glassButtonStyle(Capsule())
-        .accessibilityHint("Add, edit and choose lenses")
-        .accessibilityIdentifier("lensButton")
-    }
-}
-
-/// The format name as a glass pill button. Opens the format picker.
-private struct FormatPillButton: View {
-    let format: CaptureFormat
-    let action: () -> Void
-
-    var body: some View {
-        Button(action: action) {
-            Text(format.name)
-                .font(.footnote.weight(.semibold))
-                .foregroundStyle(.white)
-                .lineLimit(1)
-                .padding(.horizontal, 4)
-                .frame(height: GlassButtonMetrics.pillLabelHeight)
-        }
-        .glassButtonStyle(Capsule())
-        .accessibilityLabel("Format, \(format.name)")
-        .accessibilityIdentifier("formatButton")
-    }
-}
-
-/// Shown under the lens pill when the setup is wider than the phone's camera can see.
+/// Shown above the meter when the setup, or the moved frame, is wider than the phone's camera can see.
 private struct WarningTag: View {
     static let height: CGFloat = 22
 
@@ -668,36 +578,6 @@ private struct WarningTag: View {
             .padding(.horizontal, 12)
             .frame(height: Self.height)
             .glassSurface(Capsule())
-    }
-}
-
-/// Lens name and its angle of view on the format.
-private struct LensReadout: View {
-    let lens: Lens?
-    let format: CaptureFormat
-    let isSimulated: Bool
-
-    var body: some View {
-        VStack(spacing: 1) {
-            if let lens {
-                let fov = FieldOfView(focalLength: lens.focalLength, format: format)
-                Text(lens.displayName)
-                    .font(.footnote.weight(.semibold))
-                    .foregroundStyle(.white)
-                Text("\(fov.anglesLabel) · \(fov.equivalentLabel)\(isSimulated ? " · Simulated" : "")")
-                    .font(.caption2.monospacedDigit())
-                    .foregroundStyle(.secondary)
-            } else {
-                Text("Add a lens")
-                    .font(.footnote.weight(.semibold))
-                    .foregroundStyle(.white)
-            }
-        }
-        .lineLimit(1)
-        .multilineTextAlignment(.center)
-        .contentTransition(.numericText())
-        .animation(.smooth, value: lens)
-        .animation(.smooth, value: format)
     }
 }
 

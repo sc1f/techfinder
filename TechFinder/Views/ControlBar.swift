@@ -1,33 +1,77 @@
 import SwiftUI
 import TechFinderCore
 
-/// The bottom control: a lens carousel, or an Add Lens button when the library is empty.
+/// The bottom row: the lens library button at the leading edge, the frame (format) button at the
+/// trailing edge, and the lens selector centred between them, growing outwards as lenses are added. The
+/// buttons' icons turn with the phone; the selector's labels turn in place.
 struct ControlBar: View {
     @Environment(LibraryStore.self) private var library
     let present: (ViewfinderView.Sheet) -> Void
     let rotation: Angle
 
     var body: some View {
-        if library.lenses.isEmpty {
-            Button {
-                present(.newLens)
-            } label: {
-                Label("Add Lens", systemImage: "plus")
-                    .font(.subheadline.weight(.semibold))
-                    .padding(.horizontal, 20)
-                    .frame(height: 48)
-                    .contentShape(Capsule())
+        HStack(spacing: 8) {
+            RoundGlassButton(systemImage: "camera.aperture", label: "Lenses", rotation: rotation) {
+                present(library.lenses.isEmpty ? .newLens : .lenses)
             }
-            .buttonStyle(.plain)
-            .glassSurface(Capsule(), interactive: true)
-        } else {
-            // Apple's segmented control, with its Liquid Glass lens, when the lenses fit; the sliding
-            // carousel when there are more than fit.
-            ViewThatFits(in: .horizontal) {
-                NativeLensPicker(rotation: rotation)
-                LensCarousel(rotation: rotation)
+            .accessibilityHint("Add, edit and choose lenses")
+            .accessibilityIdentifier("lensButton")
+
+            Group {
+                if library.lenses.isEmpty {
+                    Button {
+                        present(.newLens)
+                    } label: {
+                        Label("Add Lens", systemImage: "plus")
+                            .font(.subheadline.weight(.semibold))
+                            .padding(.horizontal, 20)
+                            .frame(height: 48)
+                            .contentShape(Capsule())
+                    }
+                    .buttonStyle(.plain)
+                    .glassSurface(Capsule(), interactive: true)
+                } else {
+                    // Apple's segmented control, with its Liquid Glass lens, when the lenses fit; the
+                    // sliding carousel when there are more than fit.
+                    ViewThatFits(in: .horizontal) {
+                        NativeLensPicker(rotation: rotation)
+                        LensCarousel(rotation: rotation)
+                    }
+                }
             }
+            .frame(maxWidth: .infinity)
+
+            RoundGlassButton(systemImage: "aspectratio", label: "Frame: \(library.selectedFormat.name)",
+                             rotation: rotation) {
+                present(.formats)
+            }
+            .accessibilityHint("Choose the sensor or film format")
+            .accessibilityIdentifier("formatButton")
         }
+    }
+}
+
+/// A round glass button, as tall as the lens selector, with an icon that turns with the phone.
+private struct RoundGlassButton: View {
+    let systemImage: String
+    let label: String
+    let rotation: Angle
+    let action: () -> Void
+
+    static let size: CGFloat = 48
+
+    var body: some View {
+        Button(action: action) {
+            Image(systemName: systemImage)
+                .font(.system(size: 18, weight: .medium))
+                .foregroundStyle(.white)
+                .rotationEffect(rotation)
+                .animation(ViewfinderView.turn, value: rotation)
+                .frame(width: Self.size - GlassButtonMetrics.padding.leading - GlassButtonMetrics.padding.trailing,
+                       height: GlassButtonMetrics.pillLabelHeight)
+        }
+        .glassButtonStyle(Circle())
+        .accessibilityLabel(label)
     }
 }
 
@@ -58,7 +102,6 @@ private struct NativeLensPicker: View {
         .pickerStyle(.segmented)
         .controlSize(.large)
         .fixedSize()
-        .frame(maxWidth: .infinity)
         .onChange(of: rotation) { _, newRotation in
             turn(to: newRotation.radians)
         }

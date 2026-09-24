@@ -363,4 +363,74 @@ final class MovementTests: XCTestCase {
         XCTAssertEqual(MovementPlanner.screenDirections(sideways: true).rise.x, 1)
         XCTAssertEqual(MovementPlanner.screenDirections(sideways: false).rise.x, -1)
     }
+
+    // MARK: - Ultrawide coverage
+
+    /// A 28 mm lens with a 70 mm image circle on 44 × 33: the circle is wider than the iPhone's
+    /// ultrawide, so the camera stays at its widest and a big rise leaves the phone's view.
+    func testUltrawideRiseGoesBeyondTheCamera() {
+        let optics = CameraOptics(horizontalFieldOfView: 108.3, aspectRatio: 4.0 / 3.0, minZoom: 1, maxZoom: 15)
+        let format = CaptureFormat(id: "44", name: "44×33", width: 43.8, height: 32.9, category: .digitalBack)
+        func layout(rise: Double) -> MovementLayout {
+            MovementPlanner.layout(format: format, focalLength: 28, movement: Movement(rise: rise, shift: 0),
+                                   imageCircle: 70, limits: .default, turnedLeft: nil, optics: optics)
+        }
+        XCTAssertEqual(layout(rise: 0).zoom, 1, "The circle needs more than the widest camera")
+        XCTAssertGreaterThan(layout(rise: 0).reachHalfWidth, layout(rise: 0).imageHalfWidth, "The circle is wider than the camera image")
+        XCTAssertFalse(layout(rise: 0).isBeyondCamera)
+        XCTAssertTrue(layout(rise: 20).isBeyondCamera)
+    }
+
+    // MARK: - Screen layout
+
+    /// Portrait screens in points with their top and bottom safe areas: every screen size iOS 17+ runs on.
+    private let screens: [(name: String, size: CGSize, top: CGFloat, bottom: CGFloat)] = [
+        ("iPhone SE", CGSize(width: 375, height: 667), 20, 0),
+        ("iPhone 13 mini", CGSize(width: 375, height: 812), 50, 34),
+        ("iPhone 11 / XR", CGSize(width: 414, height: 896), 48, 34),
+        ("iPhone 11 Pro Max", CGSize(width: 414, height: 896), 44, 34),
+        ("iPhone 14 / 16e", CGSize(width: 390, height: 844), 47, 34),
+        ("iPhone 14 Plus", CGSize(width: 428, height: 926), 47, 34),
+        ("iPhone 16", CGSize(width: 393, height: 852), 59, 34),
+        ("iPhone 16 Plus", CGSize(width: 430, height: 932), 59, 34),
+        ("iPhone 16 Pro / 17", CGSize(width: 402, height: 874), 62, 34),
+        ("iPhone 16 Pro Max", CGSize(width: 440, height: 956), 62, 34),
+        ("iPhone Air", CGSize(width: 420, height: 912), 68, 34),
+    ]
+
+    func testControlsStayInTheBlackBandsOnEveryIPhone() {
+        let metrics = ScreenLayout.Metrics()
+        for screen in screens {
+            let layout = ScreenLayout.make(screen: screen.size, safeTop: screen.top, safeBottom: screen.bottom,
+                                           aspectRatio: 4.0 / 3.0)
+            let image = layout.image
+            XCTAssertEqual(image.height / image.width, 4.0 / 3.0, accuracy: 1e-6, screen.name)
+            XCTAssertGreaterThanOrEqual(image.minX, 0, screen.name)
+            // Portrait: the meter and tools above, the pills and lens selector below.
+            XCTAssertGreaterThanOrEqual(image.minY, screen.top + metrics.top + metrics.gap - 1e-6, screen.name)
+            XCTAssertLessThanOrEqual(image.maxY, screen.size.height - screen.bottom - metrics.bottom - metrics.gap + 1e-6,
+                                     screen.name)
+            // Landscape: the meter column sits between the image and the lens row.
+            let columnTop = layout.columnCenterY - layout.columnWidth / 2
+            let columnBottom = layout.columnCenterY + layout.columnWidth / 2
+            XCTAssertGreaterThanOrEqual(columnTop, image.maxY + metrics.gap - 1e-6, screen.name)
+            XCTAssertLessThanOrEqual(columnBottom, ScreenLayout.lensRowTop(height: screen.size.height, safeBottom: screen.bottom)
+                                     - metrics.gap + 1e-6, screen.name)
+            XCTAssertGreaterThanOrEqual(layout.columnWidth, 88, "\(screen.name): wide enough to read a value")
+        }
+    }
+
+    func testImageFillsTheWidthOnAnIPhonePro() {
+        let layout = ScreenLayout.make(screen: CGSize(width: 402, height: 874), safeTop: 62, safeBottom: 34,
+                                       aspectRatio: 4.0 / 3.0)
+        XCTAssertEqual(layout.image.width, 402)
+        XCTAssertLessThanOrEqual(layout.image.minY, 437 - 268, "Moved up to leave the bottom band for the controls")
+    }
+
+    func testShortScreenShrinksTheImageBetweenTheBands() {
+        let layout = ScreenLayout.make(screen: CGSize(width: 375, height: 667), safeTop: 20, safeBottom: 0,
+                                       aspectRatio: 4.0 / 3.0)
+        XCTAssertLessThan(layout.image.width, 375)
+        XCTAssertEqual(layout.image.midX, 187.5, accuracy: 1e-6)
+    }
 }

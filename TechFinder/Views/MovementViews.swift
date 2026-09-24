@@ -17,12 +17,18 @@ struct MovementMapping: Equatable {
     var originX: Double
     var originY: Double
 
-    /// Overview: the phone image as it is. Result: zoomed and panned so the moved frame is centred and
-    /// fills `fill` of the image.
+    /// Overview: the phone image as it is, or smaller when the image circle or the frame reaches past
+    /// what the phone can see, so all of it shows. Result: zoomed and panned so the moved frame is
+    /// centred and fills `fill` of the image.
     static func make(layout: MovementLayout, imageSize: CGSize, showsOverview: Bool, fill: Double = 0.85) -> MovementMapping {
         let base = Double(imageSize.width) / (2 * layout.imageHalfWidth)
-        guard !showsOverview, layout.frameHalfWidth > 0, layout.frameHalfHeight > 0 else {
+        guard layout.frameHalfWidth > 0, layout.frameHalfHeight > 0 else {
             return MovementMapping(pointsPerTan: base, originX: 0, originY: 0)
+        }
+        if showsOverview {
+            let reach = 0.96 * min(Double(imageSize.width) / (2 * layout.reachHalfWidth),
+                                   Double(imageSize.height) / (2 * layout.reachHalfHeight))
+            return MovementMapping(pointsPerTan: min(base, reach), originX: 0, originY: 0)
         }
         let scale = fill * min(Double(imageSize.width) / (2 * layout.frameHalfWidth * base),
                                Double(imageSize.height) / (2 * layout.frameHalfHeight * base))
@@ -74,6 +80,31 @@ struct MovementOverlay: View, Animatable {
             let bounds = Path(CGRect(origin: .zero, size: size))
             let frame = rect(centerX: layout.frameCenterX, centerY: layout.frameCenterY, in: size)
             let home = rect(centerX: 0, centerY: 0, in: size)
+
+            // Beyond the phone camera's view, even at its widest: hatched, with the edge marked.
+            let cameraTopLeft = mapping.point(x: -layout.imageHalfWidth, y: -layout.imageHalfHeight, in: size)
+            let cameraBottomRight = mapping.point(x: layout.imageHalfWidth, y: layout.imageHalfHeight, in: size)
+            let camera = CGRect(x: cameraTopLeft.x, y: cameraTopLeft.y,
+                                width: cameraBottomRight.x - cameraTopLeft.x, height: cameraBottomRight.y - cameraTopLeft.y)
+            let showsBeyond = !camera.insetBy(dx: -0.5, dy: -0.5).contains(CGRect(origin: .zero, size: size))
+            if showsBeyond {
+                var beyond = bounds
+                beyond.addRect(camera)
+                context.fill(beyond, with: .color(.black), style: FillStyle(eoFill: true))
+                context.drawLayer { layer in
+                    layer.clip(to: beyond, style: FillStyle(eoFill: true))
+                    var hatch = Path()
+                    let step: CGFloat = 9
+                    var x = -size.height
+                    while x < size.width {
+                        hatch.move(to: CGPoint(x: x, y: size.height))
+                        hatch.addLine(to: CGPoint(x: x + size.height, y: 0))
+                        x += step
+                    }
+                    layer.stroke(hatch, with: .color(.white.opacity(0.16)), lineWidth: 1)
+                }
+                context.stroke(Path(camera), with: .color(.white.opacity(0.5)), style: StrokeStyle(lineWidth: 1, dash: [2, 3]))
+            }
 
             // Outside the image circle: not captured by the lens.
             var circlePath: Path?

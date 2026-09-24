@@ -70,7 +70,8 @@ struct MeterBar: View {
             choices: choices(axis, current: index),
             selectedChoice: index,
             select: { settings.set(axis, to: $0) },
-            listRotation: listRotation
+            listRotation: listRotation,
+            arrowWidth: isStacked ? 18 : 22
         )
         .accessibilityIdentifier("meter-\(axis.rawValue)")
     }
@@ -103,6 +104,7 @@ private struct MeterDial: View {
     let selectedChoice: Int
     let select: (Int) -> Void
     let listRotation: Angle
+    let arrowWidth: CGFloat
 
     /// Steps already applied during the current swipe.
     @State private var swipeSteps = 0
@@ -173,6 +175,8 @@ private struct MeterDial: View {
                 }
                 .font(.system(size: 8, weight: .medium))
                 .foregroundStyle(.secondary)
+                .lineLimit(1)
+                .minimumScaleFactor(0.75)
 
                 Text(value)
                     .font(.system(size: 13, weight: .semibold).monospacedDigit())
@@ -189,7 +193,7 @@ private struct MeterDial: View {
             Image(systemName: systemImage)
                 .font(.system(size: 10, weight: .bold))
                 .foregroundStyle(.white.opacity(enabled ? 0.7 : 0.2))
-                .frame(width: 22)
+                .frame(width: arrowWidth)
                 .frame(maxHeight: .infinity)
                 .contentShape(Rectangle())
         }

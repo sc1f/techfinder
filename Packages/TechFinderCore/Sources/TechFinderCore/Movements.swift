@@ -223,6 +223,22 @@ public struct MovementLayout: Equatable, Sendable {
     /// Half the width and height of the camera image at `zoom`.
     public var imageHalfWidth: Double
     public var imageHalfHeight: Double
+
+    /// Half the width and height the overview must show: the image circle and the moved frame.
+    public var reachHalfWidth: Double {
+        max(circleRadius ?? 0, abs(frameCenterX) + frameHalfWidth)
+    }
+
+    public var reachHalfHeight: Double {
+        max(circleRadius ?? 0, abs(frameCenterY) + frameHalfHeight)
+    }
+
+    /// Part of the moved frame is outside what the phone camera can see, even at its widest: an
+    /// ultrawide lens, or a large movement, needs more than the iPhone's field of view.
+    public var isBeyondCamera: Bool {
+        abs(frameCenterX) + frameHalfWidth > imageHalfWidth + 1e-9
+            || abs(frameCenterY) + frameHalfHeight > imageHalfHeight + 1e-9
+    }
 }
 
 public enum MovementPlanner {

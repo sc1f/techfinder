@@ -29,7 +29,7 @@ jobs:
   test:
     name: Build & test
     runs-on: macos-26
-    timeout-minutes: 45
+    timeout-minutes: 60
     steps:
       - uses: actions/checkout@v4
 
@@ -108,6 +108,19 @@ jobs:
         with:
           name: screenshots
           path: ${{ runner.temp }}/screens
+          retention-days: 14
+
+      # The same layout on the smallest and largest iPhones: the layout UI test (every control stays off
+      # the camera image) and screenshots on an iPhone SE, 13 mini, 16 Pro and 16 Pro Max.
+      - name: Layout on other iPhones
+        run: scripts/device-matrix.sh "$RUNNER_TEMP/device-matrix"
+
+      - name: Upload device screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: device-screenshots
+          path: ${{ runner.temp }}/device-matrix
           retention-days: 14
 
       # An unsigned Release build for iPhone, so a free Apple ID can sign and install it locally with

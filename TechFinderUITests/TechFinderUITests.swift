@@ -159,22 +159,67 @@ final class TechFinderUITests: XCTestCase {
         app.launchArguments += ["-TFSimulateHold", "landscapeLeft"]
         app.launch()
 
-        let shutter = app.otherElements["meter-shutter"].firstMatch
-        XCTAssertTrue(shutter.waitForExistence(timeout: 15))
-        let aperture = app.otherElements["meter-aperture"].firstMatch
-        let iso = app.otherElements["meter-iso"].firstMatch
-        // Turned left, the viewer's top is the screen's right: shutter, aperture, ISO from there.
-        XCTAssertGreaterThan(shutter.frame.midX, aperture.frame.midX)
-        XCTAssertGreaterThan(aperture.frame.midX, iso.frame.midX)
+        let image = app.otherElements["viewfinderImage"].firstMatch
+        XCTAssertTrue(image.waitForExistence(timeout: 15))
+        let selector = app.segmentedControls.firstMatch
+        XCTAssertTrue(selector.waitForExistence(timeout: 5))
+        // Accessibility doesn't follow SwiftUI's rotation, so tap where the turned column is drawn: centred
+        // between the image and the lens row, shutter, aperture, ISO from the viewer's top (the screen's
+        // right), each 40 pt thick with 8 pt between.
+        let window = app.windows.firstMatch
+        let y = (image.frame.maxY + selector.frame.minY) / 2
+        let shutter = CGPoint(x: window.frame.midX + 48, y: y)
+        window.coordinate(withNormalizedOffset: .zero).withOffset(CGVector(dx: shutter.x, dy: shutter.y)).tap()
 
-        // Accessibility reports the turned pill's upright frame; its centre is still right.
-        shutter.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
         let list = app.collectionViews["choices"].firstMatch
         XCTAssertTrue(list.waitForExistence(timeout: 5), "Tapping the shutter lists speeds")
         XCTAssertGreaterThan(list.frame.width, list.frame.height, "The list is turned to read upright")
         attachScreenshot(of: app, named: "landscape-shutter-list")
         app.buttons["1/125"].firstMatch.tap()
-        XCTAssertEqual(shutter.value as? String, "1/125")
+        XCTAssertEqual(app.otherElements["meter-shutter"].firstMatch.value as? String, "1/125")
+    }
+
+    /// On whatever iPhone this runs on, every control sits in the black bands around the camera image,
+    /// upright and held sideways. CI runs this on several screen sizes.
+    func testControlsStayOffTheImage() {
+        for hold in ["portrait", "landscapeLeft"] {
+            let app = XCUIApplication.fresh()
+            app.launchArguments += ["-TFSimulateHold", hold, "-TFImageCircle", "90", "-TFMovements", "YES",
+                                    "-TFRise", "4", "-TFShift", "0", "-TFOverview", "NO"]
+            app.launch()
+            let image = app.otherElements["viewfinderImage"].firstMatch
+            XCTAssertTrue(image.waitForExistence(timeout: 15), hold)
+            let imageFrame = image.frame
+            attachScreenshot(of: app, named: "layout-\(hold)")
+
+            var controls: [(String, XCUIElement)] = [
+                ("reset", app.buttons["resetFrameButton"].firstMatch),
+                ("grid", app.buttons["gridButton"].firstMatch),
+                ("movements", app.buttons["movementsButton"].firstMatch),
+                ("settings", app.buttons["settingsButton"].firstMatch),
+                ("lenses", app.buttons["lensButton"].firstMatch),
+                ("frame", app.buttons["formatButton"].firstMatch),
+                ("lens selector", app.segmentedControls.firstMatch),
+            ]
+            if hold == "portrait" {
+                // Held sideways the meter is a turned column, whose accessibility frames don't follow the
+                // turn (the unit tests check where it goes), and the movement controls run along the
+                // viewer's bottom edge, over the image.
+                controls += [("ISO", app.otherElements["meter-iso"].firstMatch),
+                             ("aperture", app.otherElements["meter-aperture"].firstMatch),
+                             ("shutter", app.otherElements["meter-shutter"].firstMatch),
+                             ("movement dial", app.otherElements["movementDial"].firstMatch)]
+            }
+            for (name, element) in controls {
+                XCTAssertTrue(element.waitForExistence(timeout: 5), "\(name) exists (\(hold))")
+                let frame = element.frame
+                XCTAssertFalse(frame.insetBy(dx: 1, dy: 1).intersects(imageFrame),
+                               "\(name) \(frame) covers the image \(imageFrame) (\(hold))")
+                XCTAssertTrue(app.windows.firstMatch.frame.contains(frame.insetBy(dx: 1, dy: 1)),
+                              "\(name) \(frame) is on screen (\(hold))")
+            }
+            app.terminate()
+        }
     }
 
     func testLensSelectorTapAndDrag() {
@@ -187,12 +232,12 @@ final class TechFinderUITests: XCTestCase {
         let thirtyTwo = app.buttons["HR Digaron-S 32"]
         XCTAssertTrue(thirtyTwo.waitForExistence(timeout: 5))
         thirtyTwo.tap()
-        XCTAssertTrue(lensButton.label.contains("HR Digaron-S 32"), "Tapping a lens selects it: \(lensButton.label)")
+        XCTAssertTrue(thirtyTwo.isSelected, "Tapping a lens selects it")
 
         // Drag from 32 mm across to 70 mm: the glass lens follows the finger and selects on the way.
         let seventy = app.buttons["HR Digaron-S 70"]
         thirtyTwo.press(forDuration: 0.1, thenDragTo: seventy)
-        XCTAssertTrue(lensButton.label.contains("HR Digaron-S 70"), "Dragging selects the lens under the finger: \(lensButton.label)")
+        XCTAssertTrue(seventy.isSelected, "Dragging selects the lens under the finger")
     }
 
     func testAddingALensWithAnImageCircle() {

@@ -180,6 +180,7 @@ final class TechFinderUITests: XCTestCase {
         let thirtyTwo = app.buttons["HR Digaron-S 32"]
         XCTAssertTrue(thirtyTwo.waitForExistence(timeout: 15))
         thirtyTwo.tap()
+        attachScreenshot(of: app, named: "lens-nickname")
         // Any element type: Liquid Glass can wrap the text.
         let notice = app.descendants(matching: .any)["lensNotice"]
         XCTAssertTrue(notice.waitForExistence(timeout: 2), "The nickname shows")

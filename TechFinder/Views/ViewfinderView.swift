@@ -582,6 +582,7 @@ private struct ImageNotices: View {
                     .glassSurface(Capsule())
                     .allowsHitTesting(false)
                     .transition(.opacity.combined(with: .scale(scale: 0.9)))
+                    .accessibilityElement(children: .combine)
                     .accessibilityIdentifier("lensNotice")
             }
             if let undo {

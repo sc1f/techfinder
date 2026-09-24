@@ -21,97 +21,16 @@ struct ControlBar: View {
             .buttonStyle(.plain)
             .glassSurface(Capsule(), interactive: true)
         } else {
-            // Apple's segmented control, with its Liquid Glass lens, when the lenses fit; the sliding
-            // carousel when there are more than fit.
-            ViewThatFits(in: .horizontal) {
-                NativeLensPicker(rotation: rotation)
-                LensCarousel(rotation: rotation)
-            }
+            LensCarousel(rotation: rotation)
         }
-    }
-}
-
-/// The system segmented control. On iOS 26 the selection lifts into a clear glass lens while pressed
-/// or dragged, like the Photos app's bottom bar.
-private struct NativeLensPicker: View {
-    @Environment(LibraryStore.self) private var library
-    let rotation: Angle
-
-    /// The rotation the labels are drawn at. It trails `rotation` so the control can fade out, swap its
-    /// labels while hidden and fade back in, instead of snapping to new label sizes.
-    @State private var labelRotation: Angle?
-    @State private var labelOpacity = 1.0
-
-    private var selection: Binding<Lens.ID?> {
-        Binding(get: { library.selectedLensID }, set: { library.selectedLensID = $0 })
-    }
-
-    var body: some View {
-        Picker("Lens", selection: selection) {
-            ForEach(library.lenses) { lens in
-                label(for: lens)
-                    .accessibilityLabel(lens.displayName)
-                    .tag(Optional(lens.id))
-            }
-        }
-        .pickerStyle(.segmented)
-        .controlSize(.large)
-        .fixedSize()
-        .opacity(labelOpacity)
-        .frame(maxWidth: .infinity)
-        .onChange(of: rotation) { _, newRotation in
-            withAnimation(.easeIn(duration: 0.12)) {
-                labelOpacity = 0
-            } completion: {
-                labelRotation = newRotation
-                withAnimation(.easeOut(duration: 0.22)) { labelOpacity = 1 }
-            }
-        }
-    }
-
-    @ViewBuilder
-    private func label(for lens: Lens) -> some View {
-        let rotation = labelRotation ?? self.rotation
-        if rotation == .zero {
-            Text("\(lens.focalLengthLabel)mm")
-        } else {
-            // Segments only show plain text or images, so turned labels are drawn as images.
-            Image(uiImage: TurnedLabel.image(lens.focalLengthLabel, angle: rotation))
-        }
-    }
-}
-
-/// Renders a short label as a template image turned by a quarter turn, for segmented control segments.
-enum TurnedLabel {
-    static func image(_ text: String, angle: Angle) -> UIImage {
-        let font = UIFont.systemFont(ofSize: 15, weight: .semibold).withMonospacedDigits()
-        let attributed = NSAttributedString(string: text, attributes: [.font: font, .foregroundColor: UIColor.black])
-        let textSize = attributed.size()
-        let size = CGSize(width: ceil(textSize.height), height: ceil(textSize.width))
-        let image = UIGraphicsImageRenderer(size: size).image { context in
-            let cg = context.cgContext
-            cg.translateBy(x: size.width / 2, y: size.height / 2)
-            cg.rotate(by: angle.radians)
-            attributed.draw(at: CGPoint(x: -textSize.width / 2, y: -textSize.height / 2))
-        }
-        return image.withRenderingMode(.alwaysTemplate)
-    }
-}
-
-private extension UIFont {
-    func withMonospacedDigits() -> UIFont {
-        let descriptor = fontDescriptor.addingAttributes([
-            .featureSettings: [[UIFontDescriptor.FeatureKey.type: kNumberSpacingType,
-                                UIFontDescriptor.FeatureKey.selector: kMonospacedNumbersSelector]],
-        ])
-        return UIFont(descriptor: descriptor, size: pointSize)
     }
 }
 
 /// Saved lenses, wide to long, on a centred glass pill that hugs them and grows from the middle.
 ///
-/// When they fit, the highlight slides to the selected lens; dragging moves a glass lens under the finger
-/// and selects the lens beneath it. When there are more lenses than fit, the pill spans the width and
+/// When they fit, the highlight slides to the selected lens; dragging lifts a clear glass lens that
+/// follows the finger, magnifies the lens numbers beneath it and selects the one it is over. Numbers turn
+/// in place with the phone without the pill changing size. When there are more lenses than fit, the pill spans the width and
 /// works like the Camera app's mode switcher: the selected lens sits in the centre, dragging slides the
 /// row, and releasing snaps to the nearest lens (a flick carries on).
 ///
@@ -160,7 +79,8 @@ private struct LensCarousel: View {
             track(width: trackWidth, fits: fits)
                 .frame(width: trackWidth, height: height)
                 .clipShape(Capsule())
-                .glassSurface(Capsule(), interactive: true)
+                // Plain glass: the lifted lens is the drag feedback, so the pill itself shouldn't stretch.
+                .glassSurface(Capsule())
                 .contentShape(Capsule())
                 .gesture(slide(fits: fits))
                 .position(x: available / 2, y: height / 2)
@@ -189,7 +109,8 @@ private struct LensCarousel: View {
                 .offset(x: thumbX - thumbWidth / 2)
                 .opacity(isDragging ? 0 : 1)
 
-            items
+            // While dragging, lenses near the glass lens grow as if magnified by it.
+            items(magnifierX: isDragging ? lensX - rowX : nil)
                 .offset(x: rowX)
                 .mask {
                     if fits {
@@ -218,10 +139,12 @@ private struct LensCarousel: View {
         .animation(.smooth(duration: 0.2), value: thumbWidth)
     }
 
-    private var items: some View {
-        HStack(spacing: spacing) {
+    /// - Parameter magnifierX: Centre of the glass lens in row coordinates while dragging.
+    private func items(magnifierX: CGFloat?) -> some View {
+        let centers = Dictionary(uniqueKeysWithValues: slots.map { ($0.id, $0.center) })
+        return HStack(spacing: spacing) {
             ForEach(library.lenses) { lens in
-                item(for: lens)
+                item(for: lens, magnification: magnification(at: centers[lens.id], lens: magnifierX))
                     .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { width in
                         widths[lens.id] = width
                     }
@@ -230,26 +153,34 @@ private struct LensCarousel: View {
         .fixedSize()
     }
 
-    private func item(for lens: Lens) -> some View {
+    /// Up to 25% larger right under the lens, fading to none a lens-width away.
+    private func magnification(at center: CGFloat?, lens: CGFloat?) -> CGFloat {
+        guard let center, let lens else { return 1 }
+        let reach = minItemWidth
+        return 1 + 0.25 * max(0, 1 - abs(center - lens) / reach)
+    }
+
+    private func item(for lens: Lens, magnification: CGFloat) -> some View {
         let isSelected = lens.id == library.selectedLensID
-        // Turned sideways, "65mm" would be taller than the track, so only the number turns.
         let isTurned = rotation != .zero
 
         return Button {
             withAnimation(settle) { library.selectedLensID = lens.id }
         } label: {
-            HStack(alignment: .firstTextBaseline, spacing: 1) {
+            ZStack {
+                // The upright label always sets the width, so the pill doesn't resize as the phone turns.
+                uprightLabel(lens)
+                    .opacity(isTurned ? 0 : 1)
+                // Turned sideways, "65mm" would be taller than the track, so only the number turns.
                 Text(lens.focalLengthLabel)
                     .font(.system(size: 17, weight: .semibold).monospacedDigit())
-                if !isTurned {
-                    Text("mm")
-                        .font(.system(size: 10, weight: .medium))
-                        .opacity(0.7)
-                }
+                    .fixedSize()
+                    .rotationEffect(rotation)
+                    .opacity(isTurned ? 1 : 0)
             }
-            .fixedSize()
-            .rotationEffect(rotation)
             .animation(ViewfinderView.turn, value: rotation)
+            .scaleEffect(magnification)
+            .animation(.smooth(duration: 0.12), value: magnification)
             .foregroundStyle(isSelected ? Color.accentColor : .white)
             .padding(.horizontal, 12)
             .frame(minWidth: minItemWidth)
@@ -259,6 +190,17 @@ private struct LensCarousel: View {
         .buttonStyle(.plain)
         .accessibilityLabel(lens.displayName)
         .accessibilityAddTraits(isSelected ? .isSelected : [])
+    }
+
+    private func uprightLabel(_ lens: Lens) -> some View {
+        HStack(alignment: .firstTextBaseline, spacing: 1) {
+            Text(lens.focalLengthLabel)
+                .font(.system(size: 17, weight: .semibold).monospacedDigit())
+            Text("mm")
+                .font(.system(size: 10, weight: .medium))
+                .opacity(0.7)
+        }
+        .fixedSize()
     }
 
     // MARK: - Dragging

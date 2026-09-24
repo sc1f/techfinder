@@ -113,6 +113,24 @@ final class TechFinderUITests: XCTestCase {
         XCTAssertTrue(value.hasPrefix("+"), "Dragging down should rise, got \(value)")
     }
 
+    func testLensSelectorTapAndDrag() {
+        let app = XCUIApplication()
+        app.launch()
+
+        let lensButton = app.buttons["lensButton"]
+        XCTAssertTrue(lensButton.waitForExistence(timeout: 15))
+
+        let thirtyTwo = app.buttons["HR Digaron-S 32"]
+        XCTAssertTrue(thirtyTwo.waitForExistence(timeout: 5))
+        thirtyTwo.tap()
+        XCTAssertTrue(lensButton.label.contains("HR Digaron-S 32"), "Tapping a lens selects it: \(lensButton.label)")
+
+        // Drag from 32 mm across to 70 mm: the glass lens follows the finger and selects on the way.
+        let seventy = app.buttons["HR Digaron-S 70"]
+        thirtyTwo.press(forDuration: 0.1, thenDragTo: seventy)
+        XCTAssertTrue(lensButton.label.contains("HR Digaron-S 70"), "Dragging selects the lens under the finger: \(lensButton.label)")
+    }
+
     private func attachScreenshot(of app: XCUIApplication, named name: String) {
         let attachment = XCTAttachment(screenshot: app.screenshot())
         attachment.name = name

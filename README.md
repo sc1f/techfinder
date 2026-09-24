@@ -20,7 +20,7 @@ A minimal iPhone viewfinder for technical-camera photographers. Choose a lens an
 - **Controls.**
   - Under the meter are the tools: Grid, Reset Frame Size and Settings. Settings sets the ISO, aperture and shutter limits of your equipment; values outside them turn orange.
   - At the bottom, the lens and format pills sit above the lens selector. Tap either to change it.
-  - The lens selector is Apple's segmented control. On iOS 26 the selection lifts into a glass lens as you drag across it, as in the Photos app. When there are more lenses than fit, it becomes a sliding pill like the Camera app's mode switcher.
+  - The lens selector is a glass pill that hugs your lenses. Tap a lens, or drag across it: a clear glass lens lifts, follows your finger, magnifies the numbers beneath it and selects as it passes. The numbers turn in place with the phone without the pill changing size. With more lenses than fit, it becomes a sliding row like the Camera app's mode switcher.
   - Tap the image to focus and meter at that point, then drag up or down to brighten or darken. Tap elsewhere to move the point, or tap the square to return to automatic. The square hides after 3 seconds.
 - **Image circle and movements.**
   - Give each lens its manufacturer image circle: one or two figures, such as 90 mm at f/11. The circle at the metered aperture is interpolated in stops, or estimated conservatively (marked *) when wider than any figure.

@@ -13,6 +13,8 @@ public final class LibraryStore {
     public var exposure: ExposureSettings = .default { didSet { save() } }
     /// The equipment's ISO, aperture and shutter limits, for warnings.
     public var exposureLimits: ExposureLimits = .default { didSet { save() } }
+    /// The camera's mechanical rise/fall and shift range.
+    public var movementLimits: MovementLimits = .default { didSet { save() } }
 
     @ObservationIgnored private let fileURL: URL?
 
@@ -29,6 +31,7 @@ public final class LibraryStore {
             selectedFormatID = FormatCatalog.legacyFormatIDs[snapshot.selectedFormatID] ?? snapshot.selectedFormatID
             exposure = snapshot.exposure ?? .default
             exposureLimits = snapshot.exposureLimits ?? .default
+            movementLimits = snapshot.movementLimits ?? .default
         } else {
             lenses = FormatCatalog.starterLenses.sorted(by: Self.lensOrder)
             selectedLensID = lenses.first(where: { $0.focalLength == 50 })?.id ?? lenses.first?.id
@@ -115,6 +118,7 @@ public final class LibraryStore {
         // Added later; missing in older files.
         var exposure: ExposureSettings?
         var exposureLimits: ExposureLimits?
+        var movementLimits: MovementLimits?
     }
 
     private static func lensOrder(_ a: Lens, _ b: Lens) -> Bool {
@@ -135,7 +139,8 @@ public final class LibraryStore {
         guard let fileURL else { return }
         let snapshot = Snapshot(lenses: lenses, customFormats: customFormats,
                                 selectedLensID: selectedLensID, selectedFormatID: selectedFormatID,
-                                exposure: exposure, exposureLimits: exposureLimits)
+                                exposure: exposure, exposureLimits: exposureLimits,
+                                movementLimits: movementLimits)
         do {
             let data = try JSONEncoder().encode(snapshot)
             try data.write(to: fileURL, options: .atomic)

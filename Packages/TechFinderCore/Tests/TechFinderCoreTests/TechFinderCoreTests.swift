@@ -205,3 +205,101 @@ final class ExposureTests: XCTestCase {
         XCTAssertEqual(reloaded.exposureLimits.shutter, 10...40)
     }
 }
+
+final class ImageCircleTests: XCTestCase {
+    func testSingleFigureHoldsWhenStoppedDownAndShrinksWider() {
+        let points = [ImageCirclePoint(diameter: 90, fNumber: 11)]
+        XCTAssertEqual(ImageCircleModel.diameter(points, at: 16)?.diameter, 90)
+        XCTAssertEqual(ImageCircleModel.diameter(points, at: 11)?.isEstimate, false)
+        // Two stops wider: 6% smaller, and flagged as an estimate.
+        let wide = ImageCircleModel.diameter(points, at: 5.5)!
+        XCTAssertEqual(wide.diameter, 90 * 0.94, accuracy: 1e-9)
+        XCTAssertTrue(wide.isEstimate)
+        // Never below 80% of the figure.
+        XCTAssertEqual(ImageCircleModel.diameter(points, at: 1)!.diameter, 72, accuracy: 1e-9)
+    }
+
+    func testTwoFiguresInterpolateInStops() {
+        let points = [ImageCirclePoint(diameter: 150, fNumber: 22), ImageCirclePoint(diameter: 120, fNumber: 5.6)]
+        XCTAssertEqual(ImageCircleModel.diameter(points, at: 5.6)!.diameter, 120, accuracy: 1e-9)
+        XCTAssertEqual(ImageCircleModel.diameter(points, at: 22)!.diameter, 150, accuracy: 1e-9)
+        XCTAssertEqual(ImageCircleModel.diameter(points, at: 32)!.diameter, 150, accuracy: 1e-9)
+        // f/11 is about halfway in stops between f/5.6 and f/22.
+        XCTAssertEqual(ImageCircleModel.diameter(points, at: 11)!.diameter, 135, accuracy: 0.5)
+    }
+
+    func testNoFiguresMeansUnknown() {
+        XCTAssertNil(ImageCircleModel.diameter([], at: 8))
+    }
+
+    func testLensesWithoutImageCircleStillLoad() throws {
+        let json = #"{"id":"5A1C4A2E-4B7B-4C8B-9D9A-0F6B7E0B2C11","name":"Old","focalLength":50}"#
+        let lens = try JSONDecoder().decode(Lens.self, from: Data(json.utf8))
+        XCTAssertEqual(lens.imageCircle, [])
+    }
+}
+
+final class MovementTests: XCTestCase {
+    // 53.4 × 40 back, portrait frame: rise runs along the 53.4 mm side.
+    private let geometry = MovementGeometry(format: FormatCatalog.defaultFormat, riseAlongLongSide: true)
+
+    func testUnmovedFrameUsesTheDiagonal() {
+        XCTAssertEqual(geometry.farthestCorner(.zero), FormatCatalog.defaultFormat.diagonal / 2, accuracy: 1e-9)
+        XCTAssertEqual(geometry.margin(.zero, imageCircle: 90), 45 - 33.36, accuracy: 0.01)
+    }
+
+    func testRiseStopsAtTheImageCircle() {
+        // 90 mm circle: rise until the top corners touch: sqrt(45² − 20²) − 26.7 ≈ 13.61 mm.
+        let maximum = geometry.maximum(.rise, other: 0, imageCircle: 90, limits: .default)
+        XCTAssertEqual(maximum, (45.0 * 45 - 20 * 20).squareRoot() - 26.7, accuracy: 1e-9)
+        let moved = geometry.moving(.zero, .rise, to: 30, imageCircle: 90, limits: .default)
+        XCTAssertEqual(moved.rise, maximum, accuracy: 1e-9)
+        XCTAssertEqual(geometry.margin(moved, imageCircle: 90), 0, accuracy: 1e-9)
+    }
+
+    func testShiftingFirstLeavesLessRise() {
+        let shifted = geometry.moving(.zero, .shift, to: 10, imageCircle: 90, limits: .default)
+        XCTAssertEqual(shifted.shift, 10)
+        let rise = geometry.maximum(.rise, other: shifted.shift, imageCircle: 90, limits: .default)
+        XCTAssertLessThan(rise, geometry.maximum(.rise, other: 0, imageCircle: 90, limits: .default))
+    }
+
+    func testIncrementsNeverPassTheLimit() {
+        let maximum = geometry.maximum(.rise, other: 0, imageCircle: 90, limits: .default) // ≈ 13.61
+        let moved = geometry.moving(.zero, .rise, to: 13.5 + 0.5, imageCircle: 90, limits: .default, increment: 0.5)
+        XCTAssertEqual(moved.rise, 13.5)
+        XCTAssertLessThanOrEqual(moved.rise, maximum)
+        // A corner already on the circle leaves no room, and no negative zero.
+        let atEdge = Movement(rise: maximum, shift: 0)
+        let blocked = geometry.moving(atEdge, .shift, to: -0.5, imageCircle: 90, limits: .default, increment: 0.5)
+        XCTAssertEqual(blocked.shift, 0)
+        XCTAssertEqual(blocked.shift.sign, .plus)
+    }
+
+    func testMechanicalLimitsApplyWithoutAnImageCircle() {
+        let moved = geometry.moving(.zero, .shift, to: -50, imageCircle: nil, limits: .default)
+        XCTAssertEqual(moved.shift, -20)
+    }
+
+    func testTooSmallACircleAllowsNoMovement() {
+        XCTAssertEqual(geometry.maximum(.rise, other: 0, imageCircle: 60, limits: .default), 0)
+    }
+
+    func testLayoutPlacesTheMovedFrameOnScreen() {
+        let optics = CameraOptics(horizontalFieldOfView: 108.3, aspectRatio: 4.0 / 3.0, minZoom: 1, maxZoom: 15)
+        let layout = MovementPlanner.layout(format: FormatCatalog.defaultFormat, focalLength: 50,
+                                            movement: Movement(rise: 10, shift: 5), imageCircle: 90,
+                                            limits: .default, turnedLeft: nil, optics: optics)
+        // Upright: rise moves the frame up the screen (negative y), shift to the right.
+        XCTAssertEqual(layout.frameCenterY, -10.0 / 50, accuracy: 1e-9)
+        XCTAssertEqual(layout.frameCenterX, 5.0 / 50, accuracy: 1e-9)
+        XCTAssertEqual(layout.circleRadius!, 45.0 / 50, accuracy: 1e-9)
+        // The whole circle fits the camera image.
+        XCTAssertLessThanOrEqual(layout.circleRadius!, layout.imageHalfWidth + 1e-9)
+    }
+
+    func testSidewaysPhoneTurnsTheAxes() {
+        XCTAssertEqual(MovementPlanner.screenDirections(sideways: true).rise.x, 1)
+        XCTAssertEqual(MovementPlanner.screenDirections(sideways: false).rise.x, -1)
+    }
+}

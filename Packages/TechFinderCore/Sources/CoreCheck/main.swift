@@ -72,6 +72,14 @@ check(ExposureSolver.solve(sunny, meteredEV100: 15).label(.shutter) == "1/125", 
 check(abs(ExposureSolver.ev100(isoIndex: 12, apertureIndex: 24, shutterIndex: 18) - 15) < 1e-9, "EV 15")
 check(ExposureScale.labels(.shutter)[39] == "1\"" && ExposureScale.labels(.aperture)[18] == "8" && ExposureScale.labels(.iso)[12] == "100", "scale anchors")
 
+let circle = [ImageCirclePoint(diameter: 90, fNumber: 11)]
+check(ImageCircleModel.diameter(circle, at: 16)?.diameter == 90, "image circle held when stopped down")
+check(ImageCircleModel.diameter(circle, at: 5.5)?.isEstimate == true, "wider than quoted is an estimate")
+let geo = MovementGeometry(format: FormatCatalog.defaultFormat, riseAlongLongSide: true)
+let riseMax = geo.maximum(.rise, other: 0, imageCircle: 90, limits: .default)
+check(abs(riseMax - ((45.0 * 45 - 20 * 20).squareRoot() - 26.7)) < 1e-9, "rise limit from image circle")
+check(abs(geo.margin(geo.moving(.zero, .rise, to: 99, imageCircle: 90, limits: .default), imageCircle: 90)) < 1e-9, "clamped to circle edge")
+
 print(String(format: "Sample: 32mm on IQ4 → zoom %.2fx, frame %.0f%% × %.0f%%, %@, %@",
              s32.zoom, s32.longFraction * 100, s32.shortFraction * 100,
              FieldOfView(focalLength: 32, format: iq4).anglesLabel, FieldOfView(focalLength: 32, format: iq4).equivalentLabel))

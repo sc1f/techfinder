@@ -6,11 +6,32 @@ public struct Lens: Identifiable, Codable, Hashable, Sendable {
     public var name: String
     /// Focal length in millimetres.
     public var focalLength: Double
+    /// Manufacturer image circle figures, e.g. 90 mm at f/11. Empty when unknown.
+    public var imageCircle: [ImageCirclePoint]
 
-    public init(id: UUID = UUID(), name: String, focalLength: Double) {
+    public init(id: UUID = UUID(), name: String, focalLength: Double, imageCircle: [ImageCirclePoint] = []) {
         self.id = id
         self.name = name
         self.focalLength = focalLength
+        self.imageCircle = imageCircle
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case id, name, focalLength, imageCircle
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = try container.decode(UUID.self, forKey: .id)
+        name = try container.decode(String.self, forKey: .name)
+        focalLength = try container.decode(Double.self, forKey: .focalLength)
+        // Added later; missing in older libraries.
+        imageCircle = try container.decodeIfPresent([ImageCirclePoint].self, forKey: .imageCircle) ?? []
+    }
+
+    /// The image circle diameter at an aperture, if the lens has image circle figures.
+    public func imageCircle(at fNumber: Double) -> ImageCircleModel.Estimate? {
+        ImageCircleModel.diameter(imageCircle, at: fNumber)
     }
 
     public static let focalLengthRange: ClosedRange<Double> = 1...2000

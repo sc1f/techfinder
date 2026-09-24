@@ -54,6 +54,11 @@ struct LensLibraryView: View {
         }
     }
 
+    private func imageCircleLabel(_ lens: Lens) -> String? {
+        guard let figure = lens.imageCircle.max(by: { $0.fNumber < $1.fNumber }) else { return nil }
+        return "IC \(Millimetres.label(figure.diameter)) mm"
+    }
+
     private func close() {
         if let closePanel { closePanel() } else { dismiss() }
     }
@@ -73,7 +78,7 @@ struct LensLibraryView: View {
                         .frame(minWidth: 44, alignment: .trailing)
                     VStack(alignment: .leading, spacing: 2) {
                         Text(lens.displayName)
-                        Text("\(fov.anglesLabel) · \(fov.equivalentLabel)")
+                        Text([fov.anglesLabel, fov.equivalentLabel, imageCircleLabel(lens)].compactMap { $0 }.joined(separator: " · "))
                             .font(.caption.monospacedDigit())
                             .foregroundStyle(.secondary)
                     }

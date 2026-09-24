@@ -14,7 +14,18 @@ struct LensEditorView: View {
     let isRoot: Bool
     @State private var name: String
     @State private var focalLengthText: String
+    @State private var circleRows: [CircleRow]
     @FocusState private var focusedField: Field?
+
+    /// One image circle figure being edited.
+    private struct CircleRow: Identifiable {
+        let id = UUID()
+        var diameterText: String
+        var fNumber: Double
+    }
+
+    /// Apertures manufacturers quote image circles at.
+    private static let quotedApertures: [Double] = [4, 4.5, 5.6, 6.8, 8, 11, 16, 22, 32, 45]
 
     private enum Field { case focalLength, name }
 
@@ -23,6 +34,16 @@ struct LensEditorView: View {
         self.isRoot = isRoot
         _name = State(initialValue: item.lens.name)
         _focalLengthText = State(initialValue: item.isNew ? "" : item.lens.focalLengthLabel)
+        _circleRows = State(initialValue: item.lens.imageCircle.map {
+            CircleRow(diameterText: Millimetres.label($0.diameter), fNumber: $0.fNumber)
+        })
+    }
+
+    /// The valid image circle figures entered so far.
+    private var imageCircle: [ImageCirclePoint] {
+        circleRows.compactMap { row in
+            Double.parseMillimetres(row.diameterText).map { ImageCirclePoint(diameter: $0, fNumber: row.fNumber) }
+        }
     }
 
     private var focalLength: Double? {
@@ -63,6 +84,8 @@ struct LensEditorView: View {
                 .monospacedDigit()
             }
 
+            imageCircleSection(format: format)
+
             if !item.isNew {
                 Section {
                     Button("Delete Lens", role: .destructive) {
@@ -95,11 +118,54 @@ struct LensEditorView: View {
         var lens = item.lens
         lens.name = name.trimmingCharacters(in: .whitespacesAndNewlines)
         lens.focalLength = focalLength
+        lens.imageCircle = imageCircle
         library.save(lens)
         if item.isNew {
             library.selectedLensID = lens.id
         }
         finish()
+    }
+
+    @ViewBuilder
+    private func imageCircleSection(format: CaptureFormat) -> some View {
+        Section {
+            ForEach($circleRows) { $row in
+                HStack {
+                    TextField("90", text: $row.diameterText)
+                        .keyboardType(.decimalPad)
+                        .frame(maxWidth: 64)
+                    Text("mm at")
+                        .foregroundStyle(.secondary)
+                    Spacer()
+                    Picker("Aperture", selection: $row.fNumber) {
+                        ForEach(Self.quotedApertures, id: \.self) { stop in
+                            Text("f/\(Millimetres.label(stop))").tag(stop)
+                        }
+                    }
+                    .labelsHidden()
+                }
+            }
+            .onDelete { circleRows.remove(atOffsets: $0) }
+
+            if circleRows.count < 2 {
+                Button(circleRows.isEmpty ? "Add Image Circle" : "Add Another Aperture") {
+                    circleRows.append(CircleRow(diameterText: "", fNumber: circleRows.isEmpty ? 11 : 5.6))
+                }
+            }
+
+            if let largest = imageCircle.max(by: { $0.fNumber < $1.fNumber }) {
+                let geometry = MovementGeometry(format: format, riseAlongLongSide: true)
+                let rise = geometry.maximum(.rise, other: 0, imageCircle: largest.diameter, limits: .unlimited)
+                let shift = geometry.maximum(.shift, other: 0, imageCircle: largest.diameter, limits: .unlimited)
+                LabeledContent("Rise or Fall", value: "±\(Millimetres.label(rise)) mm")
+                LabeledContent("Shift", value: "±\(Millimetres.label(shift)) mm")
+            }
+        } header: {
+            Text("Image Circle")
+        } footer: {
+            Text("From the lens data sheet: Rodenstock quotes f/11, Schneider and most large-format lenses f/22. Add a second figure, such as wide open, to follow how coverage changes with aperture. Movements shown are for \(format.name) held upright, at the smallest quoted aperture.")
+        }
+        .monospacedDigit()
     }
 
     /// Goes back to the library, or closes the presentation when this editor is its root.

@@ -58,6 +58,61 @@ final class TechFinderUITests: XCTestCase {
         XCTAssertTrue(settings.waitForExistence(timeout: 5))
     }
 
+    /// A 90 mm image circle at f/11 on the 50 mm lens and a 53.4 × 40 back, upright: rise stops where the
+    /// top corners meet the circle, and each axis moves on its own.
+    func testMovementsStopAtTheImageCircle() {
+        let app = XCUIApplication()
+        app.launchArguments = ["-TFImageCircle", "90", "-TFMovements", "YES", "-TFRise", "0", "-TFShift", "0",
+                               "-TFOverview", "NO"]
+        app.launch()
+
+        let dial = app.otherElements["movementDial"].firstMatch
+        XCTAssertTrue(dial.waitForExistence(timeout: 15), "Movement controls should appear")
+        XCTAssertEqual(dial.value as? String, "0 mm")
+
+        let up = dial.coordinate(withNormalizedOffset: CGVector(dx: 0.93, dy: 0.5))
+        let down = dial.coordinate(withNormalizedOffset: CGVector(dx: 0.07, dy: 0.5))
+
+        // Shift first, then rise: each axis moves on its own.
+        app.buttons["axis-shift"].tap()
+        down.tap()
+        XCTAssertEqual(dial.value as? String, "-0.5 mm", "One step shifts half a millimetre")
+
+        app.buttons["axis-rise"].tap()
+        XCTAssertEqual(dial.value as? String, "0 mm", "Rise starts at zero")
+        for _ in 0..<32 { up.tap() }
+        let risen = dial.value as? String ?? ""
+        attachScreenshot(of: app, named: "rise-at-limit")
+        // At f/8 the f/11 figure is estimated a little smaller; either way rise stops at the image circle,
+        // well short of the 25 mm camera limit.
+        let millimetres = Double(risen.replacingOccurrences(of: " mm", with: "")) ?? 0
+        XCTAssertGreaterThan(millimetres, 10, "Rose to the image circle, got \(risen)")
+        XCTAssertLessThan(millimetres, 14, "Stopped at the image circle, got \(risen)")
+
+        app.buttons["axis-shift"].tap()
+        XCTAssertEqual(dial.value as? String, "-0.5 mm", "Rising left the shift alone")
+
+        app.buttons["overviewButton"].tap()
+        attachScreenshot(of: app, named: "overview")
+    }
+
+    func testDraggingTheImageMovesTheChosenAxis() {
+        let app = XCUIApplication()
+        app.launchArguments = ["-TFImageCircle", "90", "-TFMovements", "YES", "-TFRise", "0", "-TFShift", "0",
+                               "-TFOverview", "NO"]
+        app.launch()
+
+        let dial = app.otherElements["movementDial"].firstMatch
+        XCTAssertTrue(dial.waitForExistence(timeout: 15))
+        let window = app.windows.firstMatch
+        // In the result view the scene follows the finger: dragging down rises.
+        let start = window.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.35))
+        let end = window.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.45))
+        start.press(forDuration: 0.05, thenDragTo: end)
+        let value = dial.value as? String ?? ""
+        XCTAssertTrue(value.hasPrefix("+"), "Dragging down should rise, got \(value)")
+    }
+
     private func attachScreenshot(of app: XCUIApplication, named name: String) {
         let attachment = XCTAttachment(screenshot: app.screenshot())
         attachment.name = name

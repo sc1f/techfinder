@@ -1,7 +1,8 @@
 import SwiftUI
 import TechFinderCore
 
-/// The equipment limits the light meter warns about: ISO, aperture and shutter ranges.
+/// Equipment limits: the ISO, aperture and shutter ranges the light meter warns about, and how far the
+/// camera's movements go.
 struct ExposureSettingsView: View {
     @Environment(LibraryStore.self) private var library
     @Environment(\.dismiss) private var dismiss
@@ -18,10 +19,20 @@ struct ExposureSettingsView: View {
                              footer: "Leaf shutters usually top out at 1/500 s.")
 
                 Section {
+                    movementStepper(.rise, title: "Rise/Fall")
+                    movementStepper(.shift, title: "Shift")
+                } header: {
+                    Text("Camera Movements")
+                } footer: {
+                    Text("How far your camera moves either side of centre. Movements also stop at the lens's image circle.")
+                }
+
+                Section {
                     Button("Reset to Defaults") {
                         library.exposureLimits = .default
+                        library.movementLimits = .default
                     }
-                    .disabled(library.exposureLimits == .default)
+                    .disabled(library.exposureLimits == .default && library.movementLimits == .default)
                 } footer: {
                     Text("Meter values outside these limits turn orange.")
                 }
@@ -62,6 +73,14 @@ struct ExposureSettingsView: View {
             Text(footer)
         }
         .pickerStyle(.menu)
+        .monospacedDigit()
+    }
+
+    private func movementStepper(_ axis: MovementAxis, title: String) -> some View {
+        let value = library.movementLimits[axis]
+        return Stepper(value: Binding(get: { value }, set: { library.movementLimits[axis] = $0 }), in: 0...60, step: 1) {
+            LabeledContent(title, value: "±\(Millimetres.label(value)) mm")
+        }
         .monospacedDigit()
     }
 

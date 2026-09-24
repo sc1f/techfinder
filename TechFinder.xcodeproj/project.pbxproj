@@ -17,6 +17,7 @@
 		473396F7A738F65E02D47B64 /* LensLibraryView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA82ECA49E5B783C1C8E31AC /* LensLibraryView.swift */; };
 		4FB64422AD093BBDF061360D /* CameraPreview.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3CC170A9DDCC0F91DDFB4774 /* CameraPreview.swift */; };
 		5E76CA51A6AFAF02F12DEA86 /* CameraController.swift in Sources */ = {isa = PBXBuildFile; fileRef = C847B53F09284C239161CDE6 /* CameraController.swift */; };
+		65F03837C9302609DCCB73D3 /* MovementViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = B55540A5922F08379AB98F2F /* MovementViews.swift */; };
 		722AA208955D49DB568EBAF9 /* LensEditorView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2E18ADAFB4F9D6E439F6DA7A /* LensEditorView.swift */; };
 		7910D696A199ADEB1C98F76B /* Panel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 21304C25CCE38C75D150A8BA /* Panel.swift */; };
 		A455BD4325EFA0B04B1C5CEA /* TechFinderUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 88B498D23DAE3B126152E901 /* TechFinderUITests.swift */; };
@@ -52,6 +53,7 @@
 		A3969A99DBD2AE10EC4C29A0 /* ViewfinderView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ViewfinderView.swift; sourceTree = "<group>"; };
 		A9081AB6D466D9B6128B2E46 /* MeterBar.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MeterBar.swift; sourceTree = "<group>"; };
 		AA82ECA49E5B783C1C8E31AC /* LensLibraryView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LensLibraryView.swift; sourceTree = "<group>"; };
+		B55540A5922F08379AB98F2F /* MovementViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MovementViews.swift; sourceTree = "<group>"; };
 		BCC2D6C5BE9D6BD8C43D59B9 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		C847B53F09284C239161CDE6 /* CameraController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CameraController.swift; sourceTree = "<group>"; };
 		D5E41A047F1D41D66B678243 /* FormatPickerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FormatPickerView.swift; sourceTree = "<group>"; };
@@ -119,6 +121,7 @@
 				2E18ADAFB4F9D6E439F6DA7A /* LensEditorView.swift */,
 				AA82ECA49E5B783C1C8E31AC /* LensLibraryView.swift */,
 				A9081AB6D466D9B6128B2E46 /* MeterBar.swift */,
+				B55540A5922F08379AB98F2F /* MovementViews.swift */,
 				D8236BA655A2C43493EB68C3 /* SimulatedScene.swift */,
 				A3969A99DBD2AE10EC4C29A0 /* ViewfinderView.swift */,
 			);
@@ -283,6 +286,7 @@
 				722AA208955D49DB568EBAF9 /* LensEditorView.swift in Sources */,
 				473396F7A738F65E02D47B64 /* LensLibraryView.swift in Sources */,
 				24B8D18572C0EE6372A6D57A /* MeterBar.swift in Sources */,
+				65F03837C9302609DCCB73D3 /* MovementViews.swift in Sources */,
 				7910D696A199ADEB1C98F76B /* Panel.swift in Sources */,
 				BFDAF99ECF19771555949878 /* SimulatedScene.swift in Sources */,
 				342B98B3F84D5FBD6A50BC15 /* TechFinderApp.swift in Sources */,

@@ -29,7 +29,7 @@ jobs:
   test:
     name: Build & test
     runs-on: macos-26
-    timeout-minutes: 60
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
 
@@ -110,19 +110,6 @@ jobs:
           path: ${{ runner.temp }}/screens
           retention-days: 14
 
-      # The same layout on the smallest and largest iPhones: the layout UI test (every control stays off
-      # the camera image) and screenshots on an iPhone SE, 13 mini, 16 Pro and 16 Pro Max.
-      - name: Layout on other iPhones
-        run: scripts/device-matrix.sh "$RUNNER_TEMP/device-matrix"
-
-      - name: Upload device screenshots
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: device-screenshots
-          path: ${{ runner.temp }}/device-matrix
-          retention-days: 14
-
       # An unsigned Release build for iPhone, so a free Apple ID can sign and install it locally with
       # scripts/install-liquid-glass.sh (Liquid Glass needs this newer SDK).
       - name: Build unsigned iPhone app
@@ -157,6 +144,31 @@ jobs:
           path: |
             ${{ runner.temp }}/TestResults.xcresult
             ${{ runner.temp }}/xcodebuild.log
+
+  # The same layout on the smallest and largest iPhones, alongside the main job: the layout UI test
+  # (every control stays off the camera image) and screenshots on an iPhone SE, 13 mini, 16 Pro and
+  # 16 Pro Max. Each Simulator takes several minutes to boot on the runner.
+  layout:
+    name: Layout on other iPhones
+    runs-on: macos-26
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: maxim-lobanov/setup-xcode@v1
+        with:
+          xcode-version: latest-stable
+
+      - name: Layout test and screenshots
+        run: scripts/device-matrix.sh "$RUNNER_TEMP/device-matrix"
+
+      - name: Upload device screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: device-screenshots
+          path: ${{ runner.temp }}/device-matrix
+          retention-days: 14
 
   testflight:
     name: Upload to TestFlight

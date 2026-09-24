@@ -140,7 +140,7 @@ final class TechFinderUITests: XCTestCase {
         XCTAssertTrue(focalLength.waitForExistence(timeout: 15), "New lens editor should open")
         focalLength.tap()
         focalLength.typeText("72")
-        app.buttons["Done"].firstMatch.tap() // Close the number pad.
+        closeKeyboard(app)
 
         app.buttons["Add Image Circle"].tap()
         let diameter = app.textFields["90"]
@@ -150,7 +150,7 @@ final class TechFinderUITests: XCTestCase {
         diameter.typeText("158")
         XCTAssertTrue(app.staticTexts["Rise or Fall"].waitForExistence(timeout: 5), "Coverage is shown once a figure is entered")
         // Any number of apertures can be added.
-        app.buttons["Done"].firstMatch.tap()
+        closeKeyboard(app)
         app.swipeUp()
         app.buttons["Add Another Aperture"].tap()
         app.swipeUp()
@@ -165,6 +165,12 @@ final class TechFinderUITests: XCTestCase {
         lensButton.tap()
         XCTAssertTrue(app.staticTexts.containing(NSPredicate(format: "label CONTAINS 'IC 158 mm'")).firstMatch
             .waitForExistence(timeout: 5), "The library lists the image circle")
+    }
+
+    /// Taps the keyboard's Done button when the keyboard is showing (it may not be on CI).
+    private func closeKeyboard(_ app: XCUIApplication) {
+        let done = app.keyboards.count > 0 ? app.toolbars.buttons["Done"].firstMatch : app.buttons["NoKeyboard"]
+        if done.exists { done.tap() }
     }
 
     private func attachScreenshot(of app: XCUIApplication, named name: String) {

@@ -98,6 +98,8 @@ jobs:
           shoot 2-lenses -TFPresent lenses
           shoot 3-landscape-left -TFSimulateHold landscapeLeft
           shoot 4-landscape-right-formats -TFSimulateHold landscapeRight -TFPresent formats
+          shoot 5-movements-result -TFImageCircle 90 -TFMovements YES -TFRise 8 -TFShift 4 -TFOverview NO
+          shoot 6-movements-overview -TFImageCircle 90 -TFMovements YES -TFRise 8 -TFShift 4 -TFOverview YES
           exit $failed
 
       - name: Upload screenshots

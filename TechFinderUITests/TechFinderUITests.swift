@@ -131,6 +131,32 @@ final class TechFinderUITests: XCTestCase {
         XCTAssertTrue(lensButton.label.contains("HR Digaron-S 70"), "Dragging selects the lens under the finger: \(lensButton.label)")
     }
 
+    func testAddingALensWithAnImageCircle() {
+        let app = XCUIApplication()
+        app.launchArguments = ["-TFPresent", "newLens"]
+        app.launch()
+
+        let focalLength = app.textFields["50"]
+        XCTAssertTrue(focalLength.waitForExistence(timeout: 15), "New lens editor should open")
+        focalLength.tap()
+        focalLength.typeText("72")
+
+        app.buttons["Add Image Circle"].tap()
+        let diameter = app.textFields["90"]
+        XCTAssertTrue(diameter.waitForExistence(timeout: 5))
+        diameter.tap()
+        diameter.typeText("158")
+        XCTAssertTrue(app.staticTexts["Rise or Fall"].waitForExistence(timeout: 5), "Coverage is shown once a figure is entered")
+        attachScreenshot(of: app, named: "lens-image-circle")
+        app.buttons["Save"].tap()
+
+        let lensButton = app.buttons["lensButton"]
+        XCTAssertTrue(lensButton.waitForExistence(timeout: 5))
+        lensButton.tap()
+        XCTAssertTrue(app.staticTexts.containing(NSPredicate(format: "label CONTAINS 'IC 158 mm'")).firstMatch
+            .waitForExistence(timeout: 5), "The library lists the image circle")
+    }
+
     private func attachScreenshot(of app: XCUIApplication, named name: String) {
         let attachment = XCTAttachment(screenshot: app.screenshot())
         attachment.name = name

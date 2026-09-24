@@ -118,7 +118,7 @@ struct ViewfinderView: View {
 
     private func viewfinder(solution: FramingSolution?, movement: MovementInfo?) -> some View {
         GeometryReader { geometry in
-            let imageRect = screenLayout(geometry).image
+            let imageRect = screenLayout(geometry, solution: solution, movement: movement).image
             let mapping = movement.map {
                 MovementMapping.make(layout: $0.layout, imageSize: imageRect.size, showsOverview: movements.showsOverview)
             }
@@ -163,9 +163,9 @@ struct ViewfinderView: View {
         .gesture(pinchToAdjustFill)
     }
 
-    /// Portrait: the tools across the top; at the bottom, within thumb reach, the movement controls (or
-    /// a warning) above the meter, and the lens row under it. Held sideways, the tools and the lens row
-    /// stay put with their icons turned, and the meter and movements move to `sideBlocks`.
+    /// The tools across the top; at the bottom, within thumb reach, the movement controls (or a warning)
+    /// above the meter, and the lens row under it. Held sideways everything stays put with its icons and
+    /// text turned, except the movement controls, which move to `sideBlocks`.
     private func controls(solution: FramingSolution?, exposure: ExposureSolution, movement: MovementInfo?) -> some View {
         VStack(spacing: 0) {
             ToolRow(rotation: orientation.rotation, showsGrid: $showsGrid, showsMovements: movementsToggle,
@@ -175,23 +175,18 @@ struct ViewfinderView: View {
                 .padding(.top, 8)
             Spacer()
             VStack(spacing: 12) {
-                setupBlock(solution: solution, movement: movement)
-                meterBar(exposure: exposure, isStacked: false)
+                if !orientation.isLandscape {
+                    setupBlock(solution: solution, movement: movement)
+                }
+                MeterBar(settings: exposureSettings, solution: exposure, limits: library.exposureLimits,
+                         ev100: meteredEV, readingIsClipped: camera.meterIsClipped, step: library.meterStep,
+                         rotation: orientation.rotation)
             }
-            .opacity(orientation.isLandscape ? 0 : 1)
-            .allowsHitTesting(!orientation.isLandscape)
-            .accessibilityHidden(orientation.isLandscape)
             .padding(.bottom, 12)
             ControlBar(present: present, rotation: orientation.rotation)
                 .padding(.bottom, 8)
         }
         .padding(.horizontal, 16)
-    }
-
-    private func meterBar(exposure: ExposureSolution, isStacked: Bool) -> some View {
-        MeterBar(settings: exposureSettings, solution: exposure, limits: library.exposureLimits,
-                 ev100: meteredEV, readingIsClipped: camera.meterIsClipped, step: library.meterStep,
-                 isStacked: isStacked, listRotation: isStacked ? orientation.rotation : .zero)
     }
 
     /// The movement controls when movements are on, with a warning above them when the frame reaches
@@ -352,20 +347,12 @@ struct ViewfinderView: View {
         }
     }
 
-    /// Held sideways, the meter stands in a column at the viewer's side, in the band between the camera
-    /// image and the lens row (the phone's bottom), and the movement controls run along the viewer's
-    /// bottom edge; both turned to read upright.
+    /// Held sideways, the movement controls (or a warning) run along the viewer's bottom edge, turned to
+    /// read upright.
     @ViewBuilder
     private func sideBlocks(solution: FramingSolution?, exposure: ExposureSolution, movement: MovementInfo?) -> some View {
         if orientation.isLandscape {
             GeometryReader { geometry in
-                let layout = screenLayout(geometry)
-                meterBar(exposure: exposure, isStacked: true)
-                    .frame(width: layout.columnWidth)
-                    .fixedSize()
-                    .rotationEffect(orientation.rotation)
-                    .position(x: geometry.size.width / 2, y: layout.columnCenterY)
-
                 // Distance from the screen edge to the centre of the turned block.
                 let inset = 12 + setupBlockHeight(solution: solution, movement: movement) / 2
                 let turnedLeft = orientation.hold == .landscapeLeft
@@ -391,10 +378,18 @@ struct ViewfinderView: View {
         }
     }
 
-    /// The camera image and the landscape column for this screen. `geometry` spans the whole screen.
-    private func screenLayout(_ geometry: GeometryProxy) -> ScreenLayout {
-        ScreenLayout.make(screen: geometry.size, safeTop: safeArea.top, safeBottom: safeArea.bottom,
-                          aspectRatio: camera.optics.aspectRatio)
+    /// Where the camera image goes, around what the control bands hold now. `geometry` spans the whole
+    /// screen.
+    private func screenLayout(_ geometry: GeometryProxy, solution: FramingSolution?, movement: MovementInfo?) -> ScreenLayout {
+        // Tool row; lens row, meter and (upright) the movement controls or warning, as in `controls`.
+        let top: CGFloat = 8 + MeterBar.height(turned: false)
+        var bottom = 8 + GlassButtonMetrics.pillHeight + 12 + MeterBar.height(turned: orientation.isLandscape)
+        let setup = setupBlockHeight(solution: solution, movement: movement)
+        if !orientation.isLandscape, setup > 0 {
+            bottom += 12 + setup
+        }
+        return ScreenLayout.make(screen: geometry.size, safeTop: safeArea.top, safeBottom: safeArea.bottom,
+                                 aspectRatio: camera.optics.aspectRatio, top: top, bottom: bottom)
     }
 
     /// Where the spot meter reads, on screen and on the sensor: a tapped point, else the moved frame's
@@ -544,7 +539,7 @@ private struct ToolButton: View {
 
     private static let width: CGFloat = 56
     /// Matches the meter pills above.
-    private static let height: CGFloat = MeterBar.height
+    private static let height: CGFloat = MeterBar.height(turned: false)
 
     var body: some View {
         Button {

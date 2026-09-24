@@ -8,6 +8,10 @@ import TechFinderCore
 /// shutter (lock icon); the meter gives the other (A). Tapping a value lists the values within the
 /// equipment limits to pick from; picking or moving the metered value makes it the one set by hand.
 /// Values outside the equipment limits turn orange.
+///
+/// Held sideways the row stays where it is, so to the viewer the pills stand upright; their text turns
+/// to read upright, the arrows then point up and down (up raises), and the order runs shutter, aperture,
+/// ISO from the viewer's top.
 struct MeterBar: View {
     @Binding var settings: ExposureSettings
     let solution: ExposureSolution
@@ -18,27 +22,19 @@ struct MeterBar: View {
     let readingIsClipped: Bool
     /// Thirds of a stop per step.
     let step: Int
-    /// Stacked shutter, aperture, ISO from the top, for the landscape column; otherwise a row.
-    var isStacked = false
-    /// How the value lists turn to read upright: they open in screen space, outside any turned parent.
-    var listRotation: Angle = .zero
+    /// How the phone is turned: the text and value lists turn by this to read upright.
+    let rotation: Angle
 
-    static let height: CGFloat = 40
+    /// Taller held sideways, where the pill's height is the width the turned text has.
+    static func height(turned: Bool) -> CGFloat { turned ? 52 : 40 }
 
     var body: some View {
-        if isStacked {
-            VStack(spacing: 8) {
-                dial(.shutter)
-                dial(.aperture)
-                dial(.iso)
-            }
-        } else {
-            HStack(spacing: 8) {
-                dial(.iso)
-                dial(.aperture)
-                dial(.shutter)
-            }
+        // The viewer's top is the screen's right when turned left (+90°), its left when turned right.
+        let axes: [ExposureAxis] = rotation.degrees < 0 ? [.shutter, .aperture, .iso] : [.iso, .aperture, .shutter]
+        HStack(spacing: 8) {
+            ForEach(axes, id: \.self) { dial($0) }
         }
+        .animation(ViewfinderView.turn, value: rotation)
     }
 
     private func dial(_ axis: ExposureAxis) -> some View {
@@ -70,8 +66,7 @@ struct MeterBar: View {
             choices: choices(axis, current: index),
             selectedChoice: index,
             select: { settings.set(axis, to: $0) },
-            listRotation: listRotation,
-            arrowWidth: isStacked ? 18 : 22
+            rotation: rotation
         )
         .accessibilityIdentifier("meter-\(axis.rawValue)")
     }
@@ -103,8 +98,7 @@ private struct MeterDial: View {
     let choices: [(index: Int, label: String)]
     let selectedChoice: Int
     let select: (Int) -> Void
-    let listRotation: Angle
-    let arrowWidth: CGFloat
+    let rotation: Angle
 
     /// Steps already applied during the current swipe.
     @State private var swipeSteps = 0
@@ -114,15 +108,19 @@ private struct MeterDial: View {
 
     private let stepDistance: CGFloat = 26
 
+    /// Turned right, the screen's left end is the viewer's top, so the left arrow and a swipe to the
+    /// left raise the value.
+    private var sign: Int { rotation.degrees < 0 ? -1 : 1 }
+
     var body: some View {
         HStack(spacing: 0) {
-            arrow("chevron.left", enabled: canLower) { apply(-1) }
+            arrow("chevron.left", enabled: sign > 0 ? canLower : canRaise) { apply(-sign) }
 
             valueArea
 
-            arrow("chevron.right", enabled: canRaise) { apply(1) }
+            arrow("chevron.right", enabled: sign > 0 ? canRaise : canLower) { apply(sign) }
         }
-        .frame(height: MeterBar.height)
+        .frame(height: MeterBar.height(turned: rotation != .zero))
         // Plain glass: interactive glass stretches with the finger, which a swipe control shouldn't.
         // A faint highlight shows the touch instead, without changing the pill's size.
         .glassSurface(Capsule())
@@ -144,48 +142,61 @@ private struct MeterDial: View {
             .onTapGesture { showsChoices = true }
             .gesture(swipe)
             .popover(isPresented: $showsChoices) {
-                let isTurned = listRotation != .zero
+                // The list opens in screen space, so it turns on its own to read upright.
+                let isTurned = rotation != .zero
                 ChoiceList(title: caption, choices: choices, selected: selectedChoice) { index in
                     select(index)
                     ticks += 1
                     showsChoices = false
                 }
-                .rotationEffect(listRotation)
+                .rotationEffect(rotation)
                 .frame(width: isTurned ? ChoiceList.size.height : ChoiceList.size.width,
                        height: isTurned ? ChoiceList.size.width : ChoiceList.size.height)
                 .presentationCompactAdaptation(.popover)
             }
     }
 
+    /// Caption and value. Held sideways they turn to read upright, laid out across the pill's height.
     private var valueLabel: some View {
-            VStack(spacing: 0) {
-                HStack(spacing: 3) {
-                    Text(caption)
-                    switch badge {
-                    case .locked:
-                        Image(systemName: "lock.fill")
-                            .foregroundStyle(Color.accentColor)
-                    case .metered:
-                        Text("A")
-                            .fontWeight(.bold)
-                            .foregroundStyle(Color.accentColor)
-                    case nil:
-                        EmptyView()
-                    }
-                }
-                .font(.system(size: 8, weight: .medium))
-                .foregroundStyle(.secondary)
-                .lineLimit(1)
-                .minimumScaleFactor(0.75)
+        GeometryReader { geometry in
+            let isTurned = rotation != .zero
+            labels
+                .frame(width: isTurned ? geometry.size.height - 8 : geometry.size.width,
+                       height: isTurned ? geometry.size.width : geometry.size.height)
+                .rotationEffect(rotation)
+                .position(x: geometry.size.width / 2, y: geometry.size.height / 2)
+        }
+        .animation(ViewfinderView.turn, value: rotation)
+        .contentShape(Rectangle())
+    }
 
-                Text(value)
-                    .font(.system(size: 13, weight: .semibold).monospacedDigit())
-                    .foregroundStyle(isWarning ? Color.orange : .white)
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.8)
+    private var labels: some View {
+        VStack(spacing: 0) {
+            HStack(spacing: 3) {
+                Text(caption)
+                switch badge {
+                case .locked:
+                    Image(systemName: "lock.fill")
+                        .foregroundStyle(Color.accentColor)
+                case .metered:
+                    Text("A")
+                        .fontWeight(.bold)
+                        .foregroundStyle(Color.accentColor)
+                case nil:
+                    EmptyView()
+                }
             }
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .contentShape(Rectangle())
+            .font(.system(size: 8, weight: .medium))
+            .foregroundStyle(.secondary)
+            .lineLimit(1)
+            .minimumScaleFactor(0.75)
+
+            Text(value)
+                .font(.system(size: 13, weight: .semibold).monospacedDigit())
+                .foregroundStyle(isWarning ? Color.orange : .white)
+                .lineLimit(1)
+                .minimumScaleFactor(0.8)
+        }
     }
 
     private func arrow(_ systemImage: String, enabled: Bool, action: @escaping () -> Void) -> some View {
@@ -193,7 +204,7 @@ private struct MeterDial: View {
             Image(systemName: systemImage)
                 .font(.system(size: 10, weight: .bold))
                 .foregroundStyle(.white.opacity(enabled ? 0.7 : 0.2))
-                .frame(width: arrowWidth)
+                .frame(width: 22)
                 .frame(maxHeight: .infinity)
                 .contentShape(Rectangle())
         }
@@ -204,7 +215,7 @@ private struct MeterDial: View {
     private var swipe: some Gesture {
         DragGesture(minimumDistance: 6)
             .onChanged { drag in
-                let steps = Int((drag.translation.width / stepDistance).rounded(.towardZero))
+                let steps = sign * Int((drag.translation.width / stepDistance).rounded(.towardZero))
                 if steps != swipeSteps {
                     apply(steps - swipeSteps)
                     swipeSteps = steps

@@ -153,30 +153,31 @@ final class TechFinderUITests: XCTestCase {
         XCTAssertEqual(iso.value as? String, "200")
     }
 
-    /// Held sideways, the meter stands in a column and its lists open turned to read upright.
-    func testLandscapeMeterColumn() {
+    /// Held sideways, the meter pills stay put and stand upright to the viewer, shutter at the top, and
+    /// their lists open turned to read upright.
+    func testLandscapeMeterTurnsInPlace() {
         let app = XCUIApplication.fresh()
         app.launchArguments += ["-TFSimulateHold", "landscapeLeft"]
         app.launch()
 
-        let image = app.otherElements["viewfinderImage"].firstMatch
-        XCTAssertTrue(image.waitForExistence(timeout: 15))
-        let selector = app.segmentedControls.firstMatch
-        XCTAssertTrue(selector.waitForExistence(timeout: 5))
-        // Accessibility doesn't follow SwiftUI's rotation, so tap where the turned column is drawn: centred
-        // between the image and the lens row, shutter, aperture, ISO from the viewer's top (the screen's
-        // right), each 40 pt thick with 8 pt between.
-        let window = app.windows.firstMatch
-        let y = (image.frame.maxY + selector.frame.minY) / 2
-        let shutter = CGPoint(x: window.frame.midX + 48, y: y)
-        window.coordinate(withNormalizedOffset: .zero).withOffset(CGVector(dx: shutter.x, dy: shutter.y)).tap()
+        let shutter = app.otherElements["meter-shutter"].firstMatch
+        XCTAssertTrue(shutter.waitForExistence(timeout: 15))
+        let aperture = app.otherElements["meter-aperture"].firstMatch
+        let iso = app.otherElements["meter-iso"].firstMatch
+        // Turned left, the viewer's top is the screen's right: shutter, aperture, ISO from there.
+        XCTAssertGreaterThan(shutter.frame.midX, aperture.frame.midX)
+        XCTAssertGreaterThan(aperture.frame.midX, iso.frame.midX)
 
+        // The screen's right arrow points to the viewer's top and raises: a faster shutter.
+        shutter.tap()
         let list = app.collectionViews["choices"].firstMatch
         XCTAssertTrue(list.waitForExistence(timeout: 5), "Tapping the shutter lists speeds")
         XCTAssertGreaterThan(list.frame.width, list.frame.height, "The list is turned to read upright")
         attachScreenshot(of: app, named: "landscape-shutter-list")
         app.buttons["1/125"].firstMatch.tap()
-        XCTAssertEqual(app.otherElements["meter-shutter"].firstMatch.value as? String, "1/125")
+        XCTAssertEqual(shutter.value as? String, "1/125")
+        shutter.coordinate(withNormalizedOffset: CGVector(dx: 0.95, dy: 0.5)).tap()
+        XCTAssertEqual(shutter.value as? String, "1/250", "Up raises")
     }
 
     /// On whatever iPhone this runs on, every control sits in the black bands around the camera image,
@@ -201,14 +202,12 @@ final class TechFinderUITests: XCTestCase {
                 ("frame", app.buttons["formatButton"].firstMatch),
                 ("lens selector", app.segmentedControls.firstMatch),
             ]
+            controls += [("ISO", app.otherElements["meter-iso"].firstMatch),
+                         ("aperture", app.otherElements["meter-aperture"].firstMatch),
+                         ("shutter", app.otherElements["meter-shutter"].firstMatch)]
             if hold == "portrait" {
-                // Held sideways the meter is a turned column, whose accessibility frames don't follow the
-                // turn (the unit tests check where it goes), and the movement controls run along the
-                // viewer's bottom edge, over the image.
-                controls += [("ISO", app.otherElements["meter-iso"].firstMatch),
-                             ("aperture", app.otherElements["meter-aperture"].firstMatch),
-                             ("shutter", app.otherElements["meter-shutter"].firstMatch),
-                             ("movement dial", app.otherElements["movementDial"].firstMatch)]
+                // Held sideways the movement controls run along the viewer's bottom edge, over the image.
+                controls.append(("movement dial", app.otherElements["movementDial"].firstMatch))
             }
             for (name, element) in controls {
                 XCTAssertTrue(element.waitForExistence(timeout: 5), "\(name) exists (\(hold))")

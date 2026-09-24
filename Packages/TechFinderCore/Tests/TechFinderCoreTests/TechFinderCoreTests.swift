@@ -398,39 +398,42 @@ final class MovementTests: XCTestCase {
         ("iPhone Air", CGSize(width: 420, height: 912), 68, 34),
     ]
 
+    /// Tool row above; below, the lens row and meter, plus movement controls and a warning at most.
+    private let top: CGFloat = 8 + 40
+    private let bottoms: [CGFloat] = [8 + 48 + 12 + 40, 8 + 48 + 12 + 40 + 12 + 48 + 8 + 22, 8 + 48 + 12 + 52]
+
     func testControlsStayInTheBlackBandsOnEveryIPhone() {
-        let metrics = ScreenLayout.Metrics()
         for screen in screens {
-            let layout = ScreenLayout.make(screen: screen.size, safeTop: screen.top, safeBottom: screen.bottom,
-                                           aspectRatio: 4.0 / 3.0)
-            let image = layout.image
-            XCTAssertEqual(image.height / image.width, 4.0 / 3.0, accuracy: 1e-6, screen.name)
-            XCTAssertGreaterThanOrEqual(image.minX, 0, screen.name)
-            // Portrait: the meter and tools above, the pills and lens selector below.
-            XCTAssertGreaterThanOrEqual(image.minY, screen.top + metrics.top + metrics.gap - 1e-6, screen.name)
-            XCTAssertLessThanOrEqual(image.maxY, screen.size.height - screen.bottom - metrics.bottom - metrics.gap + 1e-6,
-                                     screen.name)
-            // Landscape: the meter column sits between the image and the lens row.
-            let columnTop = layout.columnCenterY - layout.columnWidth / 2
-            let columnBottom = layout.columnCenterY + layout.columnWidth / 2
-            XCTAssertGreaterThanOrEqual(columnTop, image.maxY + metrics.gap - 1e-6, screen.name)
-            XCTAssertLessThanOrEqual(columnBottom, ScreenLayout.lensRowTop(height: screen.size.height, safeBottom: screen.bottom)
-                                     - metrics.gap + 1e-6, screen.name)
-            XCTAssertGreaterThanOrEqual(layout.columnWidth, 88, "\(screen.name): wide enough to read a value")
+            for bottom in bottoms {
+                let label = "\(screen.name), bottom \(bottom)"
+                let image = ScreenLayout.make(screen: screen.size, safeTop: screen.top, safeBottom: screen.bottom,
+                                              aspectRatio: 4.0 / 3.0, top: top, bottom: bottom).image
+                XCTAssertEqual(image.height / image.width, 4.0 / 3.0, accuracy: 1e-6, label)
+                XCTAssertGreaterThanOrEqual(image.minX, 0, label)
+                XCTAssertGreaterThanOrEqual(image.minY, screen.top + top + ScreenLayout.gap - 1e-6, label)
+                XCTAssertLessThanOrEqual(image.maxY, screen.size.height - screen.bottom - bottom - ScreenLayout.gap + 1e-6, label)
+            }
         }
     }
 
-    func testImageFillsTheWidthOnAnIPhonePro() {
-        let layout = ScreenLayout.make(screen: CGSize(width: 402, height: 874), safeTop: 62, safeBottom: 34,
-                                       aspectRatio: 4.0 / 3.0)
-        XCTAssertEqual(layout.image.width, 402)
-        XCTAssertLessThanOrEqual(layout.image.minY, 437 - 268, "Moved up to leave the bottom band for the controls")
+    /// No dead space under the image: it sits right above the bottom controls, and moves up to make room
+    /// when the movement controls appear.
+    func testImageSitsJustAboveTheBottomControls() {
+        func layout(bottom: CGFloat) -> CGRect {
+            ScreenLayout.make(screen: CGSize(width: 402, height: 874), safeTop: 62, safeBottom: 34,
+                              aspectRatio: 4.0 / 3.0, top: top, bottom: bottom).image
+        }
+        let plain = layout(bottom: bottoms[0])
+        XCTAssertEqual(plain.width, 402)
+        XCTAssertEqual(plain.maxY, 874 - 34 - bottoms[0] - ScreenLayout.gap, accuracy: 1e-6)
+        let withMovements = layout(bottom: bottoms[1])
+        XCTAssertLessThan(withMovements.minY, plain.minY)
     }
 
     func testShortScreenShrinksTheImageBetweenTheBands() {
-        let layout = ScreenLayout.make(screen: CGSize(width: 375, height: 667), safeTop: 20, safeBottom: 0,
-                                       aspectRatio: 4.0 / 3.0)
-        XCTAssertLessThan(layout.image.width, 375)
-        XCTAssertEqual(layout.image.midX, 187.5, accuracy: 1e-6)
+        let image = ScreenLayout.make(screen: CGSize(width: 375, height: 667), safeTop: 20, safeBottom: 0,
+                                      aspectRatio: 4.0 / 3.0, top: top, bottom: bottoms[1]).image
+        XCTAssertLessThan(image.width, 375)
+        XCTAssertEqual(image.midX, 187.5, accuracy: 1e-6)
     }
 }

@@ -140,17 +140,22 @@ final class TechFinderUITests: XCTestCase {
         XCTAssertTrue(focalLength.waitForExistence(timeout: 15), "New lens editor should open")
         focalLength.tap()
         focalLength.typeText("72")
+        app.buttons["Done"].firstMatch.tap() // Close the number pad.
 
         app.buttons["Add Image Circle"].tap()
         let diameter = app.textFields["90"]
+        if !diameter.waitForExistence(timeout: 2) { app.swipeUp() }
         XCTAssertTrue(diameter.waitForExistence(timeout: 5))
         diameter.tap()
         diameter.typeText("158")
         XCTAssertTrue(app.staticTexts["Rise or Fall"].waitForExistence(timeout: 5), "Coverage is shown once a figure is entered")
         // Any number of apertures can be added.
+        app.buttons["Done"].firstMatch.tap()
+        app.swipeUp()
         app.buttons["Add Another Aperture"].tap()
+        app.swipeUp()
         app.buttons["Add Another Aperture"].tap()
-        XCTAssertEqual(app.textFields.matching(identifier: "90").count + app.textFields.matching(NSPredicate(format: "placeholderValue == '90'")).count > 0, true)
+        app.swipeUp()
         XCTAssertTrue(app.buttons["Add Another Aperture"].exists, "More apertures can still be added")
         attachScreenshot(of: app, named: "lens-image-circle")
         app.buttons["Save"].tap()

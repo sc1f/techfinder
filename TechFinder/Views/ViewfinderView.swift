@@ -345,7 +345,8 @@ struct ViewfinderView: View {
         content
             .sheet(item: $sheet) { sheet in
                 presentation(sheet)
-                    .presentationDetents([.medium, .large])
+                    // A new lens is typed in, so it gets the full height; lists can start at half height.
+                    .presentationDetents(sheet == .newLens ? [.large] : [.medium, .large])
             }
     }
 

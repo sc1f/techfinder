@@ -398,9 +398,11 @@ final class MovementTests: XCTestCase {
         ("iPhone Air", CGSize(width: 420, height: 912), 68, 34),
     ]
 
-    /// Tool row above; below, the lens row and meter, plus movement controls and a warning at most.
-    private let top: CGFloat = 8 + 40
-    private let bottoms: [CGFloat] = [8 + 48 + 12 + 40, 8 + 48 + 12 + 40 + 12 + 48 + 8 + 22, 8 + 48 + 12 + 52]
+    /// Nothing above; below, the lens row, meter and buttons, plus movement controls and a warning at
+    /// most, and the meter turned taller held sideways.
+    private let top: CGFloat = 0
+    private let bottoms: [CGFloat] = [8 + 48 + 10 + 40 + 10 + 48, 8 + 48 + 10 + 40 + 10 + 48 + 10 + 48 + 8 + 22,
+                                      8 + 48 + 10 + 52 + 10 + 48]
 
     func testControlsStayInTheBlackBandsOnEveryIPhone() {
         for screen in screens {
@@ -416,18 +418,17 @@ final class MovementTests: XCTestCase {
         }
     }
 
-    /// No dead space under the image: it sits right above the bottom controls, and moves up to make room
-    /// when the movement controls appear.
-    func testImageSitsJustAboveTheBottomControls() {
+    /// With nothing above it the image sits right under the safe area, and stays put as the movement
+    /// controls come and go; the bottom band takes the rest.
+    func testImageSitsAtTheTop() {
         func layout(bottom: CGFloat) -> CGRect {
             ScreenLayout.make(screen: CGSize(width: 402, height: 874), safeTop: 62, safeBottom: 34,
                               aspectRatio: 4.0 / 3.0, top: top, bottom: bottom).image
         }
         let plain = layout(bottom: bottoms[0])
         XCTAssertEqual(plain.width, 402)
-        XCTAssertEqual(plain.maxY, 874 - 34 - bottoms[0] - ScreenLayout.gap, accuracy: 1e-6)
-        let withMovements = layout(bottom: bottoms[1])
-        XCTAssertLessThan(withMovements.minY, plain.minY)
+        XCTAssertEqual(plain.minY, 62 + ScreenLayout.gap, accuracy: 1e-6)
+        XCTAssertEqual(layout(bottom: bottoms[0] + 10 + 48).minY, plain.minY, "Movements don't move the image")
     }
 
     func testShortScreenShrinksTheImageBetweenTheBands() {

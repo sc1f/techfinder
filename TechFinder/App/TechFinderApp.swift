@@ -18,7 +18,16 @@ struct TechFinderApp: App {
         #if DEBUG
         // UI tests start from the starter kit every time, without touching saved data.
         if UserDefaults.standard.bool(forKey: "TFFreshLibrary") {
-            return LibraryStore(fileURL: nil)
+            let library = LibraryStore(fileURL: nil)
+            // `-TFLenses 28,40,65,80,150` replaces the starter lenses.
+            if let list = UserDefaults.standard.string(forKey: "TFLenses") {
+                for lens in library.lenses { library.deleteLens(id: lens.id) }
+                for focalLength in list.split(separator: ",").compactMap({ Double($0) }) {
+                    library.save(Lens(name: "", focalLength: focalLength))
+                }
+                library.selectedLensID = library.lenses.first?.id
+            }
+            return library
         }
         #endif
         return LibraryStore.appDefault()

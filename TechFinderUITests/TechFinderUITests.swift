@@ -57,12 +57,13 @@ final class TechFinderUITests: XCTestCase {
 
         let aperture = app.otherElements["meter-aperture"].firstMatch
         aperture.tap()
-        // The list opens at the metered aperture, f/5.6 here; pick the next one to hold it.
-        let next = app.buttons["f/6.3"].firstMatch
+        // The list opens at the metered aperture, f/5.6 here, in whole stops; pick the next one to hold it.
+        XCTAssertFalse(app.buttons["f/6.3"].exists, "Full-stop steps list whole stops only")
+        let next = app.buttons["f/8"].firstMatch
         XCTAssertTrue(next.waitForExistence(timeout: 5), "Tapping the aperture lists apertures")
         attachScreenshot(of: app, named: "aperture-list")
         next.tap()
-        XCTAssertEqual(aperture.value as? String, "f/6.3")
+        XCTAssertEqual(aperture.value as? String, "f/8")
 
         let settings = app.buttons["settingsButton"]
         XCTAssertTrue(settings.waitForExistence(timeout: 5))
@@ -140,17 +141,18 @@ final class TechFinderUITests: XCTestCase {
         XCTAssertTrue(iso.waitForExistence(timeout: 15))
         XCTAssertEqual(iso.value as? String, "100")
 
-        // Tapping the value lists the ISOs, opened at the current one; pick 160.
+        // Tapping the value lists the ISOs in whole stops, opened at the current one; pick 400.
         iso.tap()
-        let choice = app.buttons["160"].firstMatch
+        let choice = app.buttons["400"].firstMatch
         XCTAssertTrue(choice.waitForExistence(timeout: 5), "Tapping ISO lists the ISOs")
         attachScreenshot(of: app, named: "iso-list")
+        XCTAssertFalse(app.buttons["125"].exists, "Third stops are listed only with ⅓-stop steps")
         choice.tap()
-        XCTAssertEqual(iso.value as? String, "160")
+        XCTAssertEqual(iso.value as? String, "400")
 
-        // A full-stop step from 160 lands on the standard series: 200.
+        // A full-stop step from 400 is 800.
         iso.coordinate(withNormalizedOffset: CGVector(dx: 0.93, dy: 0.5)).tap()
-        XCTAssertEqual(iso.value as? String, "200")
+        XCTAssertEqual(iso.value as? String, "800")
     }
 
     /// Held sideways, the meter pills stay put and stand upright to the viewer, shutter at the top, and
@@ -217,6 +219,40 @@ final class TechFinderUITests: XCTestCase {
                 XCTAssertTrue(app.windows.firstMatch.frame.contains(frame.insetBy(dx: 1, dy: 1)),
                               "\(name) \(frame) is on screen (\(hold))")
             }
+            app.terminate()
+        }
+    }
+
+    /// From an empty library to ten lenses, the lens selector stays on screen, off the image and centred,
+    /// with the selected lens showing; a screenshot of each is attached.
+    func testLensSelectorWithAnyNumberOfLenses() {
+        let focalLengths = [18, 23, 28, 32, 40, 50, 65, 80, 100, 150]
+        for count in 0...focalLengths.count {
+            let lenses = focalLengths.prefix(count)
+            let app = XCUIApplication.fresh()
+            app.launchArguments += ["-TFLenses", lenses.map(String.init).joined(separator: ",")]
+            app.launch()
+
+            let selector = app.otherElements["lensSelector"].firstMatch
+            XCTAssertTrue(selector.waitForExistence(timeout: 15), "\(count) lenses")
+            let window = app.windows.firstMatch.frame
+            let image = app.otherElements["viewfinderImage"].firstMatch.frame
+            attachScreenshot(of: app, named: "lenses-\(count)")
+
+            if count == 0 {
+                XCTAssertTrue(app.buttons["Add Lens"].isHittable, "An empty library offers Add Lens")
+            } else {
+                // The first lens is selected; it shows and can be tapped, as can the last after sliding.
+                let first = app.buttons["\(lenses.first!) mm"].firstMatch
+                XCTAssertTrue(first.waitForExistence(timeout: 5), "\(count) lenses")
+                XCTAssertTrue(first.isHittable, "The selected lens shows with \(count) lenses")
+                XCTAssertTrue(first.isSelected, "\(count) lenses")
+                XCTAssertTrue(window.contains(first.frame), "\(count) lenses: \(first.frame)")
+            }
+            let row = app.segmentedControls.firstMatch.exists ? app.segmentedControls.firstMatch.frame : selector.frame
+            XCTAssertTrue(window.insetBy(dx: 15, dy: 0).contains(row), "\(count) lenses: selector \(row) fits")
+            XCTAssertFalse(row.intersects(image), "\(count) lenses: selector covers the image")
+            XCTAssertEqual(row.midX, window.midX, accuracy: 1, "\(count) lenses: selector is centred")
             app.terminate()
         }
     }

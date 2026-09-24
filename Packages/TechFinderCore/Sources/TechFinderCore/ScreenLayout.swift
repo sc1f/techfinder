@@ -3,10 +3,10 @@ import CoreGraphics
 /// Where the camera image goes on the phone's screen, in portrait points, around the controls above and
 /// below it.
 ///
-/// The controls live in black bands and never cover the image. The bottom band is as tall as what is in
-/// it (the lens row, the meter, and the movement controls or a warning when shown) and the image sits
-/// just above it, so there's no dead space under the image; the top band takes the rest. When the
-/// screen is too short for both bands (an iPhone SE with movements on) the image gets smaller.
+/// The controls live in black bands and never cover the image. The top band is only as tall as what is
+/// in it (nothing but the safe area when all the controls are at the bottom) and the image sits right
+/// under it; the bottom band takes the rest, which the controls share out. When the bottom band would be
+/// shorter than its controls need (an iPhone SE with movements on) the image gets smaller.
 public struct ScreenLayout: Equatable, Sendable {
     /// Clear space between the controls and the camera image.
     public static let gap: CGFloat = 8
@@ -20,7 +20,7 @@ public struct ScreenLayout: Equatable, Sendable {
     ///   - safeBottom: Bottom safe area inset (home indicator).
     ///   - aspectRatio: The camera image's long side over its short side.
     ///   - top: Height of the controls below the top of the safe area.
-    ///   - bottom: Height of the controls above the bottom of the safe area.
+    ///   - bottom: The least height the controls above the bottom of the safe area need.
     public static func make(screen: CGSize, safeTop: CGFloat, safeBottom: CGFloat, aspectRatio: Double,
                             top: CGFloat, bottom: CGFloat) -> ScreenLayout {
         guard screen.width > 0, screen.height > 0, aspectRatio > 0 else { return ScreenLayout(image: .zero) }
@@ -33,7 +33,7 @@ public struct ScreenLayout: Equatable, Sendable {
         if size.height > room {
             size = CGSize(width: room / CGFloat(aspectRatio), height: room)
         }
-        let y = max(maxBottom - size.height, minTop)
-        return ScreenLayout(image: CGRect(x: (screen.width - size.width) / 2, y: y, width: size.width, height: size.height))
+        return ScreenLayout(image: CGRect(x: (screen.width - size.width) / 2, y: minTop,
+                                          width: size.width, height: size.height))
     }
 }

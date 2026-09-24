@@ -163,31 +163,41 @@ struct ViewfinderView: View {
         .gesture(pinchToAdjustFill)
     }
 
-    /// The tools across the top; at the bottom, within thumb reach, the movement controls (or a warning)
-    /// above the meter, and the lens row under it. Held sideways everything stays put with its icons and
-    /// text turned, except the movement controls, which move to `sideBlocks`.
+    /// Everything sits below the camera image, within thumb reach, sharing out the band evenly: the
+    /// movement controls (or a warning), the buttons, the meter, and the lens selector at the bottom.
+    /// Held sideways everything stays put with its icons and text turned, except the movement controls,
+    /// which move to `sideBlocks`.
     private func controls(solution: FramingSolution?, exposure: ExposureSolution, movement: MovementInfo?) -> some View {
-        VStack(spacing: 0) {
-            ToolRow(rotation: orientation.rotation, showsGrid: $showsGrid, showsMovements: movementsToggle,
-                    canResetFill: abs(fill - Framing.defaultFill) > 0.001,
-                    resetFill: { withAnimation(.smooth) { fill = Framing.defaultFill } },
-                    openSettings: { present(.settings) })
-                .padding(.top, 8)
-            Spacer()
-            VStack(spacing: 12) {
-                if !orientation.isLandscape {
+        GeometryReader { geometry in
+            let image = screenLayout(geometry, solution: solution, movement: movement).image
+            let bandTop = image.maxY + ScreenLayout.gap
+            VStack(spacing: 0) {
+                Spacer(minLength: 0)
+                if !orientation.isLandscape, setupBlockHeight(solution: solution, movement: movement) > 0 {
                     setupBlock(solution: solution, movement: movement)
+                    Spacer(minLength: Self.rowSpacing)
                 }
+                ToolRow(rotation: orientation.rotation, showsGrid: $showsGrid, showsMovements: movementsToggle,
+                        canResetFill: abs(fill - Framing.defaultFill) > 0.001,
+                        resetFill: { withAnimation(.smooth) { fill = Framing.defaultFill } },
+                        present: present)
+                Spacer(minLength: Self.rowSpacing)
                 MeterBar(settings: exposureSettings, solution: exposure, limits: library.exposureLimits,
                          ev100: meteredEV, readingIsClipped: camera.meterIsClipped, step: library.meterStep,
                          rotation: orientation.rotation)
+                Spacer(minLength: Self.rowSpacing)
+                ControlBar(present: present, rotation: orientation.rotation)
+                Spacer(minLength: 8)
             }
-            .padding(.bottom, 12)
-            ControlBar(present: present, rotation: orientation.rotation)
-                .padding(.bottom, 8)
+            .padding(.horizontal, 16)
+            .frame(width: geometry.size.width, height: max(geometry.size.height - safeArea.bottom - bandTop, 0))
+            .offset(y: bandTop)
         }
-        .padding(.horizontal, 16)
+        .ignoresSafeArea()
     }
+
+    /// The least space between rows of controls; any more room is shared out evenly.
+    static let rowSpacing: CGFloat = 10
 
     /// The movement controls when movements are on, with a warning above them when the frame reaches
     /// past what the phone can see; otherwise that warning when the setup is too wide.
@@ -381,15 +391,15 @@ struct ViewfinderView: View {
     /// Where the camera image goes, around what the control bands hold now. `geometry` spans the whole
     /// screen.
     private func screenLayout(_ geometry: GeometryProxy, solution: FramingSolution?, movement: MovementInfo?) -> ScreenLayout {
-        // Tool row; lens row, meter and (upright) the movement controls or warning, as in `controls`.
-        let top: CGFloat = 8 + MeterBar.height(turned: false)
-        var bottom = 8 + GlassButtonMetrics.pillHeight + 12 + MeterBar.height(turned: orientation.isLandscape)
+        // As in `controls`: lens selector, meter, buttons and (upright) the movement controls or warning.
+        let pill = GlassButtonMetrics.pillHeight
+        var bottom = 8 + pill + Self.rowSpacing + MeterBar.height(turned: orientation.isLandscape) + Self.rowSpacing + pill
         let setup = setupBlockHeight(solution: solution, movement: movement)
         if !orientation.isLandscape, setup > 0 {
-            bottom += 12 + setup
+            bottom += Self.rowSpacing + setup
         }
         return ScreenLayout.make(screen: geometry.size, safeTop: safeArea.top, safeBottom: safeArea.bottom,
-                                 aspectRatio: camera.optics.aspectRatio, top: top, bottom: bottom)
+                                 aspectRatio: camera.optics.aspectRatio, top: 0, bottom: bottom)
     }
 
     /// Where the spot meter reads, on screen and on the sensor: a tapped point, else the moved frame's
@@ -474,95 +484,59 @@ struct ViewfinderView: View {
 
 // MARK: - Tools
 
-/// Tools across the top of the screen: reset frame size at the leading edge, grid and movements in the
-/// middle, settings at the trailing edge.
+/// Round buttons above the meter: settings, reset frame size, frame (format), lenses, movements and
+/// grid, spread across the width.
 private struct ToolRow: View {
     let rotation: Angle
     @Binding var showsGrid: Bool
     @Binding var showsMovements: Bool
     let canResetFill: Bool
     let resetFill: () -> Void
-    let openSettings: () -> Void
+    let present: (ViewfinderView.Sheet) -> Void
+
+    @Environment(LibraryStore.self) private var library
 
     var body: some View {
-        HStack(spacing: 10) {
-            reset
-            Spacer(minLength: 0)
-            grid
-            movements
-            Spacer(minLength: 0)
-            settings
+        HStack(spacing: 0) {
+            RoundGlassButton(systemImage: "slider.horizontal.3", label: "Settings", rotation: rotation) {
+                present(.settings)
+            }
+            .accessibilityIdentifier("settingsButton")
+            Spacer(minLength: 4)
+            RoundGlassButton(systemImage: "arrow.counterclockwise", label: "Reset Frame Size", rotation: rotation) {
+                resetFill()
+            }
+            .disabled(!canResetFill)
+            .accessibilityIdentifier("resetFrameButton")
+            Spacer(minLength: 4)
+            RoundGlassButton(systemImage: "aspectratio", label: "Frame: \(library.selectedFormat.name)",
+                             rotation: rotation) {
+                present(.formats)
+            }
+            .accessibilityHint("Choose the sensor or film format")
+            .accessibilityIdentifier("formatButton")
+            Spacer(minLength: 4)
+            RoundGlassButton(systemImage: "camera.aperture", label: "Lenses", rotation: rotation) {
+                present(library.lenses.isEmpty ? .newLens : .lenses)
+            }
+            .accessibilityHint("Add, edit and choose lenses")
+            .accessibilityIdentifier("lensButton")
+            Spacer(minLength: 4)
+            RoundGlassButton(systemImage: "arrow.up.and.down.and.arrow.left.and.right", label: "Movements",
+                             isOn: showsMovements, rotation: rotation) {
+                showsMovements.toggle()
+            }
+            .accessibilityIdentifier("movementsButton")
+            Spacer(minLength: 4)
+            RoundGlassButton(systemImage: "grid", label: "Grid", isOn: showsGrid, rotation: rotation) {
+                showsGrid.toggle()
+            }
+            .accessibilityIdentifier("gridButton")
         }
-    }
-
-    private var reset: some View {
-        ToolButton(systemImage: "arrow.counterclockwise", label: "Reset Frame Size", rotation: rotation) {
-            resetFill()
-        }
-        .disabled(!canResetFill)
-        .accessibilityIdentifier("resetFrameButton")
-    }
-
-    private var grid: some View {
-        ToolButton(systemImage: "grid", label: "Grid", isOn: showsGrid, rotation: rotation) {
-            showsGrid.toggle()
-        }
-        .accessibilityIdentifier("gridButton")
-    }
-
-    private var movements: some View {
-        ToolButton(systemImage: "arrow.up.and.down.and.arrow.left.and.right", label: "Movements",
-                   isOn: showsMovements, rotation: rotation) {
-            showsMovements.toggle()
-        }
-        .accessibilityIdentifier("movementsButton")
-    }
-
-    private var settings: some View {
-        ToolButton(systemImage: "slider.horizontal.3", label: "Settings", rotation: rotation) {
-            openSettings()
-        }
-        .accessibilityIdentifier("settingsButton")
     }
 }
 
-/// A glass pill with an icon that turns with the phone, and a firm haptic when pressed.
-private struct ToolButton: View {
-    let systemImage: String
-    let label: String
-    var isOn = false
-    let rotation: Angle
-    let action: () -> Void
-
-    @Environment(\.isEnabled) private var isEnabled
-    @State private var presses = 0
-
-    private static let width: CGFloat = 56
-    /// Matches the meter pills above.
-    private static let height: CGFloat = MeterBar.height(turned: false)
-
-    var body: some View {
-        Button {
-            presses += 1
-            action()
-        } label: {
-            Image(systemName: systemImage)
-                .font(.system(size: 15, weight: .medium))
-                .foregroundStyle(isOn ? Color.accentColor : .white)
-                .opacity(isEnabled ? 1 : 0.35)
-                .rotationEffect(rotation)
-                .animation(ViewfinderView.turn, value: rotation)
-                .frame(width: Self.width - GlassButtonMetrics.padding.leading - GlassButtonMetrics.padding.trailing,
-                       height: Self.height - GlassButtonMetrics.padding.top - GlassButtonMetrics.padding.bottom)
-        }
-        .glassButtonStyle(Capsule())
-        .sensoryFeedback(.impact(weight: .medium, intensity: 1), trigger: presses)
-        .accessibilityLabel(label)
-        .accessibilityAddTraits(isOn ? .isSelected : [])
-    }
-}
-
-/// Shown above the meter when the setup, or the moved frame, is wider than the phone's camera can see.
+/// Shown above the buttons when the setup, or the moved frame, is wider than the phone's camera can see.
 private struct WarningTag: View {
     static let height: CGFloat = 22
 

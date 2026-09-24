@@ -1,77 +1,75 @@
 import SwiftUI
 import TechFinderCore
 
-/// The bottom row: the lens library button at the leading edge, the frame (format) button at the
-/// trailing edge, and the lens selector centred between them, growing outwards as lenses are added. The
-/// buttons' icons turn with the phone; the selector's labels turn in place.
+/// The bottom row: the lens selector on its own, centred and growing outwards as lenses are added, or
+/// an Add Lens button when the library is empty. Its labels turn in place with the phone.
 struct ControlBar: View {
     @Environment(LibraryStore.self) private var library
     let present: (ViewfinderView.Sheet) -> Void
     let rotation: Angle
 
     var body: some View {
-        HStack(spacing: 8) {
-            RoundGlassButton(systemImage: "camera.aperture", label: "Lenses", rotation: rotation) {
-                present(library.lenses.isEmpty ? .newLens : .lenses)
-            }
-            .accessibilityHint("Add, edit and choose lenses")
-            .accessibilityIdentifier("lensButton")
-
-            Group {
-                if library.lenses.isEmpty {
-                    Button {
-                        present(.newLens)
-                    } label: {
-                        Label("Add Lens", systemImage: "plus")
-                            .font(.subheadline.weight(.semibold))
-                            .padding(.horizontal, 20)
-                            .frame(height: 48)
-                            .contentShape(Capsule())
-                    }
-                    .buttonStyle(.plain)
-                    .glassSurface(Capsule(), interactive: true)
-                } else {
-                    // Apple's segmented control, with its Liquid Glass lens, when the lenses fit; the
-                    // sliding carousel when there are more than fit.
-                    ViewThatFits(in: .horizontal) {
-                        NativeLensPicker(rotation: rotation)
-                        LensCarousel(rotation: rotation)
-                    }
+        Group {
+            if library.lenses.isEmpty {
+                Button {
+                    present(.newLens)
+                } label: {
+                    Label("Add Lens", systemImage: "plus")
+                        .font(.subheadline.weight(.semibold))
+                        .padding(.horizontal, 20)
+                        .frame(height: GlassButtonMetrics.pillHeight)
+                        .contentShape(Capsule())
+                }
+                .buttonStyle(.plain)
+                .glassSurface(Capsule(), interactive: true)
+            } else {
+                // Apple's segmented control, with its Liquid Glass lens, when the lenses fit, as numbers
+                // alone if "mm" makes it too wide; the sliding carousel when there are more than fit.
+                ViewThatFits(in: .horizontal) {
+                    NativeLensPicker(rotation: rotation, showsUnit: true)
+                    NativeLensPicker(rotation: rotation, showsUnit: false)
+                    LensCarousel(rotation: rotation)
                 }
             }
-            .frame(maxWidth: .infinity)
-
-            RoundGlassButton(systemImage: "aspectratio", label: "Frame: \(library.selectedFormat.name)",
-                             rotation: rotation) {
-                present(.formats)
-            }
-            .accessibilityHint("Choose the sensor or film format")
-            .accessibilityIdentifier("formatButton")
         }
+        .frame(maxWidth: .infinity, minHeight: GlassButtonMetrics.pillHeight)
+        .accessibilityElement(children: .contain)
+        .accessibilityIdentifier("lensSelector")
     }
 }
 
-/// A round glass button, as tall as the lens selector, with an icon that turns with the phone.
-private struct RoundGlassButton: View {
+/// A round glass button, as tall as the lens selector, with an icon that turns with the phone and a
+/// firm haptic when pressed. `isOn` tints the icon.
+struct RoundGlassButton: View {
     let systemImage: String
     let label: String
+    var isOn = false
     let rotation: Angle
     let action: () -> Void
 
-    static let size: CGFloat = 48
+    @Environment(\.isEnabled) private var isEnabled
+    @State private var presses = 0
+
+    static let size: CGFloat = GlassButtonMetrics.pillHeight
 
     var body: some View {
-        Button(action: action) {
+        Button {
+            presses += 1
+            action()
+        } label: {
             Image(systemName: systemImage)
-                .font(.system(size: 18, weight: .medium))
-                .foregroundStyle(.white)
+                .font(.system(size: 17, weight: .medium))
+                .foregroundStyle(isOn ? Color.accentColor : .white)
+                .opacity(isEnabled ? 1 : 0.35)
                 .rotationEffect(rotation)
                 .animation(ViewfinderView.turn, value: rotation)
                 .frame(width: Self.size - GlassButtonMetrics.padding.leading - GlassButtonMetrics.padding.trailing,
                        height: GlassButtonMetrics.pillLabelHeight)
         }
         .glassButtonStyle(Circle())
+        .sensoryFeedback(.impact(weight: .medium, intensity: 1), trigger: presses)
         .accessibilityLabel(label)
+        .accessibilityAddTraits(isOn ? .isSelected : [])
     }
 }
 
@@ -80,6 +78,8 @@ private struct RoundGlassButton: View {
 private struct NativeLensPicker: View {
     @Environment(LibraryStore.self) private var library
     let rotation: Angle
+    /// "65mm" rather than "65".
+    let showsUnit: Bool
 
     /// The angle the labels are drawn at. Segments show images and can't animate them, so when the phone
     /// turns the labels are redrawn frame by frame, turning with the rest of the interface.
@@ -94,7 +94,7 @@ private struct NativeLensPicker: View {
         let angle = labelAngle ?? rotation.radians
         Picker("Lens", selection: selection) {
             ForEach(library.lenses) { lens in
-                Image(uiImage: LensLabel.image(lens.focalLengthLabel, angle: angle))
+                Image(uiImage: LensLabel.image(lens.focalLengthLabel, showsUnit: showsUnit, angle: angle))
                     .accessibilityLabel(lens.displayName)
                     .tag(Optional(lens.id))
             }
@@ -134,12 +134,14 @@ enum LensLabel {
     private static let unit = UIFont.systemFont(ofSize: 10, weight: .medium)
 
     /// - Parameter angle: Radians; 0 upright, ±π/2 turned.
-    static func image(_ focalLength: String, angle: Double) -> UIImage {
+    static func image(_ focalLength: String, showsUnit: Bool, angle: Double) -> UIImage {
         let turn = min(abs(angle) / (.pi / 2), 1)
         let unitAlpha = 0.7 * max(0, 1 - turn * 2)
         let label = NSMutableAttributedString(string: focalLength, attributes: [.font: number, .foregroundColor: UIColor.black])
         let numberWidth = label.size().width
-        label.append(NSAttributedString(string: "mm", attributes: [.font: unit, .foregroundColor: UIColor.black.withAlphaComponent(unitAlpha)]))
+        if showsUnit {
+            label.append(NSAttributedString(string: "mm", attributes: [.font: unit, .foregroundColor: UIColor.black.withAlphaComponent(unitAlpha)]))
+        }
         let labelSize = label.size()
         let numberHeight = NSAttributedString(string: focalLength, attributes: [.font: number]).size().height
         // Room for either: the upright label's width, and the turned number's length as height.
@@ -255,7 +257,7 @@ private struct LensCarousel: View {
         return ZStack(alignment: .leading) {
             // Resting highlight, behind the labels.
             Capsule()
-                .fill(.white.opacity(0.16))
+                .fill(.white.opacity(0.22))
                 .frame(width: thumbWidth, height: 40)
                 .offset(x: thumbX - thumbWidth / 2)
                 .opacity(isDragging ? 0 : 1)
@@ -274,15 +276,17 @@ private struct LensCarousel: View {
                     }
                 }
 
-            // Lifted glass lens, over the labels while dragging.
-            Capsule()
-                .fill(.white.opacity(0.04))
-                .glassLens(Capsule(), isActive: isDragging)
-                .frame(width: thumbWidth + 10, height: 44)
-                .scaleEffect(isDragging ? 1.08 : 0.9)
-                .offset(x: lensX - (thumbWidth + 10) / 2)
-                .opacity(isDragging ? 1 : 0)
-                .allowsHitTesting(false)
+            // Lifted glass lens, over the labels while dragging. Only there while dragging: Liquid Glass
+            // still blurs what's under it at zero opacity.
+            if isDragging {
+                Capsule()
+                    .fill(.white.opacity(0.04))
+                    .glassLens(Capsule(), isActive: true)
+                    .frame(width: thumbWidth + 10, height: 44)
+                    .offset(x: lensX - (thumbWidth + 10) / 2)
+                    .transition(.scale(scale: 0.85).combined(with: .opacity))
+                    .allowsHitTesting(false)
+            }
         }
         .frame(width: width, height: height, alignment: .leading)
         .animation(.spring(response: 0.25, dampingFraction: 0.75), value: isDragging)
@@ -332,7 +336,7 @@ private struct LensCarousel: View {
             .animation(ViewfinderView.turn, value: rotation)
             .scaleEffect(magnification)
             .animation(.smooth(duration: 0.12), value: magnification)
-            .foregroundStyle(isSelected ? Color.accentColor : .white)
+            .foregroundStyle(.white)
             .padding(.horizontal, 12)
             .frame(minWidth: minItemWidth)
             .frame(height: 40)

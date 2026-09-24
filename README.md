@@ -10,20 +10,19 @@ A minimal iPhone viewfinder for technical-camera photographers. Choose a lens an
 - **Lens library.** Add, edit and delete lenses (focal length plus optional name). The list is sorted wide to long, and the angles of view shown are for the current format.
 - **Formats.** Digital backs are grouped by sensor size with their models listed (53.4 × 40, 53.7 × 40.4, 44 × 33, 45 × 30, 36 × 24). Film covers medium format (6×4.5 to 6×17) and large format (4×5, 5×7, 8×10). You can add custom formats.
 - **Light meter.**
-  - The meter row near the bottom shows ISO, aperture and shutter. Tap an arrow or swipe along a value to change it. Right raises the value (higher ISO, higher f-number, faster shutter); left lowers it.
+  - The meter row shows ISO, aperture and shutter. Tap an arrow or swipe along a value to change it. Right raises the value (higher ISO, higher f-number, faster shutter); left lowers it.
   - Steps are full stops by default, landing on the standard series (ISO 100, 200, 400…; f/5.6, 8, 11…; 1/125, 1/250…), or ⅓ stop in Settings.
-  - Tap ISO, aperture or shutter for a list of values within your limits. Picking the metered value sets it by hand.
+  - Tap ISO, aperture or shutter for a list of values within your limits: whole stops (1/30, 1/60, 1/125…; f/5.6, 8, 11…), or thirds with ⅓-stop steps. Picking the metered value sets it by hand.
   - ISO is always set by hand, and so is either the aperture or the shutter (lock icon). The meter gives the other (A). Pick the metered value from its list, or change it, to set it by hand instead.
 - **Spot meter.**
   - The meter reads a 3° spot, drawn as a circle at the centre cross (the moved frame's centre with movements on). It converts the spot's brightness to EV at ISO 100 using the camera's exposure, so a mid-grey spot reads correct.
   - The ISO pill shows the live reading as EV at ISO 100. To calibrate, meter a grey card with a handheld spot meter and set any consistent difference in Settings › Calibration.
   - A metered value turns orange if most of the spot is clipped white.
 - **Controls.**
-  - Everything you change while shooting is at the bottom, within thumb reach. From the top down: the movement controls (with Movements on), the meter row, then the lens row.
-  - The lens row has the Lenses button (add, edit and choose lenses) on the left, the Frame button (sensor or film format) on the right, and the lens selector centred between them, growing outwards as you add lenses.
-  - The tools sit across the top: Reset Frame Size on the left, Grid and Movements in the middle, Settings on the right. Settings sets the ISO, aperture and shutter limits of your equipment; values outside them turn orange.
-  - The controls stay in the black bands above and below the camera image and never cover it. The bottom band is as tall as what's in it, with the image just above; when the movement controls or a warning appear, the image moves up to make room. On a short screen such as the iPhone SE, the image shrinks when it has to.
-  - The lens selector is the system segmented control. On iOS 26, pressing or dragging lifts a clear glass lens that magnifies the lenses beneath it, as in the Photos app. The numbers turn with the phone without the control changing size. With more lenses than fit, it becomes a sliding row like the Camera app's mode switcher.
+  - All the controls sit below the camera image, within thumb reach, sharing out the space evenly. From the top down: the movement controls (with Movements on), a row of round buttons, the meter, and the lens selector on its own.
+  - The buttons, left to right: Settings, Reset Frame Size, Frame (sensor or film format), Lenses (add, edit and choose lenses), Movements and Grid. Settings sets the ISO, aperture and shutter limits of your equipment; values outside them turn orange.
+  - The controls never cover the camera image, which sits at the top. On a short screen such as the iPhone SE, the image shrinks when the controls need the room.
+  - The lens selector is the system segmented control. On iOS 26, pressing or dragging lifts a clear glass lens that magnifies the lenses beneath it, as in the Photos app. The numbers turn with the phone without the control changing size. Its labels drop "mm" when that is what it takes to fit (up to about eight lenses); with more lenses than fit, it becomes a sliding row like the Camera app's mode switcher.
 - **Image circle and movements.**
   - Give each lens its manufacturer image circle at one or more apertures, such as 80 mm at f/4 and 90 mm at f/11.
   - Movements use the figure quoted at the aperture closest (in stops) to the meter's, so only your real data sheet figures are used. On a tie the wider aperture's smaller circle wins. The readout shows the figure in use, such as "IC 90 f/11".
@@ -32,7 +31,7 @@ A minimal iPhone viewfinder for technical-camera photographers. Choose a lens an
   - With an ultra-wide lens, the image circle or a moved frame can reach past what the iPhone camera sees, even at its widest. That area is hatched, with the camera's edge dashed, and "Wider than the iPhone can see" shows above the movement controls. The overview zooms out to show the whole image circle.
   - Movements stop at the image circle and at the camera's mechanical limits (Settings). The readout shows the millimetres left to the circle's edge, turning orange when close and red if a later aperture change puts a corner outside.
 - **Landscape.** Hold the phone sideways and the controls stay where they are, with their icons and text turned to read upright. The meter pills stand upright to you, shutter, aperture and ISO from the top, with up raising a value; their lists open turned too. The lens labels turn smoothly with the phone, the movement controls run along the viewer's bottom edge, and sheets open as rotated glass cards.
-- **Too wide.** When the setup is wider than the iPhone's ultra-wide can see, the frame turns orange and "Wider than the iPhone can see" shows above the meter.
+- **Too wide.** When the setup is wider than the iPhone's ultra-wide can see, the frame turns orange and "Wider than the iPhone can see" shows above the buttons.
 - **Orientation.** The frame's long side runs along the phone's long side: hold the phone in landscape for a landscape frame. The interface stays portrait like the Camera app. Icons and lens labels rotate, even with Rotation Lock on.
 - **Liquid Glass.** Controls use `glassEffect` when built with the iOS 26+ SDK (Xcode 26+), on a plain black background. Older SDKs use solid dark controls (see `TechFinder/Support/Glass.swift`).
 - **Simulator.** The Simulator has no camera, so the app shows a synthetic scene with lines every 10°. Use it to check that the frame edges land at the lens's angle of view.
@@ -62,7 +61,7 @@ Packages/TechFinderCore/     models, format catalog, framing math, persistence, 
 
 `.github/workflows/ios.yml` runs on a macOS 26 runner with the latest stable Xcode.
 
-- **Every push and pull request:** builds and runs the unit tests and the UI tests (which toggle the grid, use the meter, open the sheets and check that no control covers the camera image) on an iPhone Simulator. It then launches the app in six states (portrait, the Lenses sheet, both landscape holds, and the two movement views) and fails if the app is stuck at full CPU; screenshots of each state are saved as the `screenshots` artifact. A parallel job runs `scripts/device-matrix.sh`, which runs the layout test and takes screenshots on an iPhone SE, 13 mini, 16 Pro and 16 Pro Max (the `device-screenshots` artifact). Run the script locally the same way.
+- **Every push and pull request:** builds and runs the unit tests and the UI tests (which toggle the grid, use the meter, open the sheets and check that no control covers the camera image and that the lens selector works with 0 to 10 lenses) on an iPhone Simulator. It then launches the app in six states (portrait, the Lenses sheet, both landscape holds, and the two movement views) and fails if the app is stuck at full CPU; screenshots of each state are saved as the `screenshots` artifact. A parallel job runs `scripts/device-matrix.sh`, which runs the layout tests and takes screenshots on an iPhone SE, 13 mini, 16 Pro and 16 Pro Max (the `device-screenshots` artifact). Run the script locally the same way.
 - **TestFlight:** runs from *Actions › iOS › Run workflow*, or when you push a tag such as `v0.1.0`. It archives, signs, and uploads to TestFlight. The build number is the workflow run number.
 
 - **Unsigned iPhone build:** every push to `main` also saves an unsigned build of the app, made with the latest Xcode.

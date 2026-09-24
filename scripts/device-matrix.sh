@@ -1,7 +1,7 @@
 #!/bin/bash
 # Checks the layout on several iPhone screen sizes: builds once, then on a Simulator for each size runs
-# the layout UI test (every control stays off the camera image, upright and sideways) and saves
-# screenshots of the main states.
+# the layout UI tests (every control stays off the camera image, upright and sideways; the lens selector
+# with 0 to 10 lenses) and saves screenshots of the main states.
 #
 #   scripts/device-matrix.sh [output-dir]
 #
@@ -57,10 +57,11 @@ print(next((d["udid"] for d in json.load(sys.stdin)["devices"].get(runtime, []) 
   if xcodebuild test-without-building \
       -project TechFinder.xcodeproj -scheme TechFinder \
       -destination "id=$udid" -derivedDataPath "$derived" \
-      -only-testing:TechFinderUITests/TechFinderUITests/testControlsStayOffTheImage >"$log" 2>&1; then
-    echo "   layout test passed"
+      -only-testing:TechFinderUITests/TechFinderUITests/testControlsStayOffTheImage \
+      -only-testing:TechFinderUITests/TechFinderUITests/testLensSelectorWithAnyNumberOfLenses >"$log" 2>&1; then
+    echo "   layout tests passed"
   else
-    echo "::error::Layout test failed on $type"
+    echo "::error::Layout tests failed on $type"
     grep -E "error: -" "$log" || tail -20 "$log"
     failed=1
   fi

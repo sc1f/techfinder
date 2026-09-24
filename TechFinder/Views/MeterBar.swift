@@ -71,12 +71,15 @@ struct MeterBar: View {
         .accessibilityIdentifier("meter-\(axis.rawValue)")
     }
 
-    /// Every value within the equipment limits, in thirds, plus the current one if it is outside them.
-    /// Like the arrows, lower values are at the top: small ISOs, wide apertures, slow shutter speeds.
+    /// The values within the equipment limits, whole stops only (ISO 100, 200…; f/5.6, 8…; 1/60, 1/125…)
+    /// unless the meter steps in thirds, plus the current value wherever it is. Like the arrows, lower
+    /// values are at the top: small ISOs, wide apertures, slow shutter speeds.
     private func choices(_ axis: ExposureAxis, current: Int) -> [(index: Int, label: String)] {
         let range = limits.range(axis)
         let indices = min(range.lowerBound, current)...max(range.upperBound, current)
-        let values = indices.filter { range.contains($0) || $0 == current }.map { ($0, ExposureScale.label(axis, $0)) }
+        let values = indices
+            .filter { $0 == current || (range.contains($0) && (step == 1 || ExposureScale.isFullStop($0, axis: axis))) }
+            .map { ($0, ExposureScale.label(axis, $0)) }
         // Shutter indices run fast to slow.
         return axis == .shutter ? values.reversed() : values
     }

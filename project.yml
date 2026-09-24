@@ -76,6 +76,8 @@ schemes:
       config: Debug
     test:
       config: Debug
+      # UI tests launch the app themselves; attaching the debugger makes launches time out on CI.
+      debugEnabled: false
       targets:
         - package: TechFinderCore/TechFinderCoreTests
         - TechFinderUITests

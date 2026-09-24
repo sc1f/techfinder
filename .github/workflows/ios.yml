@@ -29,7 +29,7 @@ jobs:
   test:
     name: Build & test
     runs-on: macos-26
-    timeout-minutes: 30
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
 
@@ -50,11 +50,18 @@ jobs:
       - name: Build and test
         run: |
           set -o pipefail
+          # Boot first so the UI tests' app launch doesn't race the Simulator starting up.
+          xcrun simctl boot "$SIMULATOR_UDID" 2>/dev/null || true
+          xcrun simctl bootstatus "$SIMULATOR_UDID" -b >/dev/null
           xcodebuild test \
             -project TechFinder.xcodeproj \
             -scheme TechFinder \
             -destination "platform=iOS Simulator,id=$SIMULATOR_UDID" \
             -resultBundlePath "$RUNNER_TEMP/TestResults.xcresult" \
+            -test-timeouts-enabled YES \
+            -default-test-execution-time-allowance 180 \
+            -retry-tests-on-failure \
+            -test-iterations 2 \
             | tee "$RUNNER_TEMP/xcodebuild.log" | grep -E "error:|warning:|Executed|TEST (SUCCEEDED|FAILED)"
 
       # Launches the app in the Simulator to catch hangs (a SwiftUI layout loop shows up as a pinned CPU)

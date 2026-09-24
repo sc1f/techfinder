@@ -42,6 +42,17 @@ final class DeviceOrientation {
         switch UserDefaults.standard.string(forKey: "TFSimulateHold") {
         case "landscapeLeft": hold = .landscapeLeft; return
         case "landscapeRight": hold = .landscapeRight; return
+        case "cycle":
+            // Turns portrait → left → portrait → right every 2 s, to watch rotation animations.
+            Task { @MainActor [weak self] in
+                let holds: [Hold] = [.landscapeLeft, .portrait, .landscapeRight, .portrait]
+                for index in 0... {
+                    try? await Task.sleep(for: .seconds(2))
+                    guard let self else { return }
+                    self.hold = holds[index % holds.count]
+                }
+            }
+            return
         default: break
         }
         #endif

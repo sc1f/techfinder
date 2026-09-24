@@ -153,6 +153,30 @@ final class TechFinderUITests: XCTestCase {
         XCTAssertEqual(iso.value as? String, "200")
     }
 
+    /// Held sideways, the meter stands in a column and its lists open turned to read upright.
+    func testLandscapeMeterColumn() {
+        let app = XCUIApplication.fresh()
+        app.launchArguments += ["-TFSimulateHold", "landscapeLeft"]
+        app.launch()
+
+        let shutter = app.otherElements["meter-shutter"].firstMatch
+        XCTAssertTrue(shutter.waitForExistence(timeout: 15))
+        let aperture = app.otherElements["meter-aperture"].firstMatch
+        let iso = app.otherElements["meter-iso"].firstMatch
+        // Turned left, the viewer's top is the screen's right: shutter, aperture, ISO from there.
+        XCTAssertGreaterThan(shutter.frame.midX, aperture.frame.midX)
+        XCTAssertGreaterThan(aperture.frame.midX, iso.frame.midX)
+
+        // Accessibility reports the turned pill's upright frame; its centre is still right.
+        shutter.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
+        let list = app.collectionViews["choices"].firstMatch
+        XCTAssertTrue(list.waitForExistence(timeout: 5), "Tapping the shutter lists speeds")
+        XCTAssertGreaterThan(list.frame.width, list.frame.height, "The list is turned to read upright")
+        attachScreenshot(of: app, named: "landscape-shutter-list")
+        app.buttons["1/125"].firstMatch.tap()
+        XCTAssertEqual(shutter.value as? String, "1/125")
+    }
+
     func testLensSelectorTapAndDrag() {
         let app = XCUIApplication.fresh()
         app.launch()

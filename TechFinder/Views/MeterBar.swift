@@ -18,15 +18,35 @@ struct MeterBar: View {
     let readingIsClipped: Bool
     /// Thirds of a stop per step.
     let step: Int
+    /// Stacked shutter, aperture, ISO from the top, for the landscape column; otherwise a row.
+    var isStacked = false
+    /// How the value lists turn to read upright: they open in screen space, outside any turned parent.
+    var listRotation: Angle = .zero
 
     static let height: CGFloat = 40
 
     var body: some View {
-        HStack(spacing: 8) {
-            // The raw reading, for comparing with a handheld meter.
-            dial(.iso, caption: ev100.map { String(format: "ISO · EV %.1f", $0) } ?? "ISO")
-            dial(.aperture, caption: "Aperture")
-            dial(.shutter, caption: "Shutter")
+        if isStacked {
+            VStack(spacing: 8) {
+                dial(.shutter)
+                dial(.aperture)
+                dial(.iso)
+            }
+        } else {
+            HStack(spacing: 8) {
+                dial(.iso)
+                dial(.aperture)
+                dial(.shutter)
+            }
+        }
+    }
+
+    private func dial(_ axis: ExposureAxis) -> some View {
+        switch axis {
+        // The raw reading, for comparing with a handheld meter.
+        case .iso: dial(.iso, caption: ev100.map { String(format: "ISO · EV %.1f", $0) } ?? "ISO")
+        case .aperture: dial(.aperture, caption: "Aperture")
+        case .shutter: dial(.shutter, caption: "Shutter")
         }
     }
 
@@ -49,17 +69,20 @@ struct MeterBar: View {
             change: { steps in settings.step(axis, by: steps * direction, thirdsPerStep: step, from: solution) },
             choices: choices(axis, current: index),
             selectedChoice: index,
-            select: { settings.set(axis, to: $0) }
+            select: { settings.set(axis, to: $0) },
+            listRotation: listRotation
         )
         .accessibilityIdentifier("meter-\(axis.rawValue)")
     }
 
     /// Every value within the equipment limits, in thirds, plus the current one if it is outside them.
-    /// Shutter speeds run fast to slow.
+    /// Like the arrows, lower values are at the top: small ISOs, wide apertures, slow shutter speeds.
     private func choices(_ axis: ExposureAxis, current: Int) -> [(index: Int, label: String)] {
         let range = limits.range(axis)
         let indices = min(range.lowerBound, current)...max(range.upperBound, current)
-        return indices.filter { range.contains($0) || $0 == current }.map { ($0, ExposureScale.label(axis, $0)) }
+        let values = indices.filter { range.contains($0) || $0 == current }.map { ($0, ExposureScale.label(axis, $0)) }
+        // Shutter indices run fast to slow.
+        return axis == .shutter ? values.reversed() : values
     }
 }
 
@@ -79,6 +102,7 @@ private struct MeterDial: View {
     let choices: [(index: Int, label: String)]
     let selectedChoice: Int
     let select: (Int) -> Void
+    let listRotation: Angle
 
     /// Steps already applied during the current swipe.
     @State private var swipeSteps = 0
@@ -118,11 +142,15 @@ private struct MeterDial: View {
             .onTapGesture { showsChoices = true }
             .gesture(swipe)
             .popover(isPresented: $showsChoices) {
+                let isTurned = listRotation != .zero
                 ChoiceList(title: caption, choices: choices, selected: selectedChoice) { index in
                     select(index)
                     ticks += 1
                     showsChoices = false
                 }
+                .rotationEffect(listRotation)
+                .frame(width: isTurned ? ChoiceList.size.height : ChoiceList.size.width,
+                       height: isTurned ? ChoiceList.size.width : ChoiceList.size.height)
                 .presentationCompactAdaptation(.popover)
             }
     }
@@ -195,6 +223,8 @@ private struct ChoiceList: View {
     let selected: Int
     let pick: (Int) -> Void
 
+    static let size = CGSize(width: 160, height: 300)
+
     var body: some View {
         ScrollViewReader { proxy in
             List(choices, id: \.index) { choice in
@@ -223,7 +253,7 @@ private struct ChoiceList: View {
                 proxy.scrollTo(selected, anchor: .center)
             }
         }
-        .frame(width: 160, height: 300)
+        .frame(width: Self.size.width, height: Self.size.height)
         .accessibilityIdentifier("choices")
     }
 }

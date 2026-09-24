@@ -37,19 +37,20 @@ private struct NativeLensPicker: View {
     @Environment(LibraryStore.self) private var library
     let rotation: Angle
 
-    /// The rotation the labels are drawn at. It trails `rotation` so the labels can fade out, turn while
-    /// hidden and fade back in; segments can't animate their images turning.
-    @State private var labelRotation: Angle?
-    @State private var labelOpacity = 1.0
+    /// The angle the labels are drawn at. Segments show images and can't animate them, so when the phone
+    /// turns the labels are redrawn frame by frame, turning with the rest of the interface.
+    @State private var labelAngle: Double?
+    @State private var turning: Task<Void, Never>?
 
     private var selection: Binding<Lens.ID?> {
         Binding(get: { library.selectedLensID }, set: { library.selectedLensID = $0 })
     }
 
     var body: some View {
+        let angle = labelAngle ?? rotation.radians
         Picker("Lens", selection: selection) {
             ForEach(library.lenses) { lens in
-                Image(uiImage: LensLabel.image(lens.focalLengthLabel, angle: labelRotation ?? rotation))
+                Image(uiImage: LensLabel.image(lens.focalLengthLabel, angle: angle))
                     .accessibilityLabel(lens.displayName)
                     .tag(Optional(lens.id))
             }
@@ -57,43 +58,57 @@ private struct NativeLensPicker: View {
         .pickerStyle(.segmented)
         .controlSize(.large)
         .fixedSize()
-        .opacity(labelOpacity)
         .frame(maxWidth: .infinity)
         .onChange(of: rotation) { _, newRotation in
-            withAnimation(.easeIn(duration: 0.1)) {
-                labelOpacity = 0.3
-            } completion: {
-                labelRotation = newRotation
-                withAnimation(.easeOut(duration: 0.2)) { labelOpacity = 1 }
+            turn(to: newRotation.radians)
+        }
+    }
+
+    /// Eases the labels to `target` over about the time the interface's turn spring takes to settle.
+    private func turn(to target: Double) {
+        turning?.cancel()
+        let start = labelAngle ?? target
+        turning = Task { @MainActor in
+            let duration = 0.4
+            let began = Date()
+            while !Task.isCancelled {
+                let t = min(Date().timeIntervalSince(began) / duration, 1)
+                // Ease out, like the tail of a spring.
+                let eased = 1 - pow(1 - t, 3)
+                labelAngle = start + (target - start) * eased
+                if t >= 1 { break }
+                try? await Task.sleep(for: .milliseconds(16))
             }
         }
     }
 }
 
 /// Lens labels for segmented control segments, which only show plain text or images. Upright it reads
-/// "65mm"; turned, just the number turns in the same space, so the control never changes size.
+/// "65mm"; turned a quarter, just the number, centred in the same space, so the control never changes
+/// size. In between, the number turns and moves to the centre as "mm" fades.
 enum LensLabel {
     private static let number = UIFont.systemFont(ofSize: 16, weight: .semibold).withMonospacedDigits()
     private static let unit = UIFont.systemFont(ofSize: 10, weight: .medium)
 
-    static func image(_ focalLength: String, angle: Angle) -> UIImage {
-        let upright = NSMutableAttributedString(string: focalLength, attributes: [.font: number, .foregroundColor: UIColor.black])
-        upright.append(NSAttributedString(string: "mm", attributes: [.font: unit, .foregroundColor: UIColor.black.withAlphaComponent(0.7)]))
-        let turned = NSAttributedString(string: focalLength, attributes: [.font: number, .foregroundColor: UIColor.black])
-        let uprightSize = upright.size()
-        let turnedSize = turned.size()
-        // Room for either: the upright width, and the turned number's length as height.
-        let size = CGSize(width: ceil(max(uprightSize.width, turnedSize.height)),
-                          height: ceil(max(uprightSize.height, turnedSize.width)))
+    /// - Parameter angle: Radians; 0 upright, ±π/2 turned.
+    static func image(_ focalLength: String, angle: Double) -> UIImage {
+        let turn = min(abs(angle) / (.pi / 2), 1)
+        let unitAlpha = 0.7 * max(0, 1 - turn * 2)
+        let label = NSMutableAttributedString(string: focalLength, attributes: [.font: number, .foregroundColor: UIColor.black])
+        let numberWidth = label.size().width
+        label.append(NSAttributedString(string: "mm", attributes: [.font: unit, .foregroundColor: UIColor.black.withAlphaComponent(unitAlpha)]))
+        let labelSize = label.size()
+        let numberHeight = NSAttributedString(string: focalLength, attributes: [.font: number]).size().height
+        // Room for either: the upright label's width, and the turned number's length as height.
+        let size = CGSize(width: ceil(max(labelSize.width, numberHeight)),
+                          height: ceil(max(labelSize.height, numberWidth)))
         let image = UIGraphicsImageRenderer(size: size).image { context in
             let cg = context.cgContext
             cg.translateBy(x: size.width / 2, y: size.height / 2)
-            if angle == .zero {
-                upright.draw(at: CGPoint(x: -uprightSize.width / 2, y: -uprightSize.height / 2))
-            } else {
-                cg.rotate(by: angle.radians)
-                turned.draw(at: CGPoint(x: -turnedSize.width / 2, y: -turnedSize.height / 2))
-            }
+            cg.rotate(by: angle)
+            // Upright the whole label is centred; turned, the number alone is.
+            let x = -labelSize.width / 2 + turn * (labelSize.width - numberWidth) / 2
+            label.draw(at: CGPoint(x: x, y: -labelSize.height / 2))
         }
         return image.withRenderingMode(.alwaysTemplate)
     }

@@ -175,8 +175,7 @@ struct ViewfinderView: View {
         .padding(.horizontal, 16)
     }
 
-    /// The light meter with the tools under it. In landscape the whole block is turned, so its icons
-    /// don't turn on their own (`rotation` is zero there).
+    /// The light meter with the tools under it, in portrait. Landscape uses `meterColumn` instead.
     private func topBlock(exposure: ExposureSolution, rotation: Angle) -> some View {
         VStack(spacing: 8) {
             MeterBar(settings: exposureSettings, solution: exposure, limits: library.exposureLimits,
@@ -329,24 +328,27 @@ struct ViewfinderView: View {
         }
     }
 
-    /// In landscape the meter and tools run along the viewer's top edge and the lens and format pills
-    /// along the viewer's bottom edge, each turned to read along it.
+    /// In landscape the meter and tools stand in a column at the viewer's side and the lens and format
+    /// pills run along the viewer's bottom edge, each turned to read upright.
     @ViewBuilder
     private func sideBlocks(solution: FramingSolution?, exposure: ExposureSolution, movement: MovementInfo?) -> some View {
         if orientation.isLandscape {
             let isClipped = solution?.isClipped == true
             let pill = GlassButtonMetrics.pillHeight
             GeometryReader { geometry in
-                // Distance from each screen edge to the centre of its turned block.
-                let topInset = 12 + (MeterBar.height * 2 + 8) / 2
+                // Distance from the screen edge to the centre of the turned setup block.
                 let bottomInset = 12 + (pill + (isClipped ? 8 + WarningTag.height : 0)) / 2
                 let turnedLeft = orientation.hold == .landscapeLeft
 
-                topBlock(exposure: exposure, rotation: .zero)
-                    .frame(width: 340)
+                // The meter and tools stand in a column at the viewer's side, in the band above the
+                // camera image (the phone's top), clear of the Dynamic Island.
+                let imageTop = Self.imageRect(in: geometry.size, aspectRatio: camera.optics.aspectRatio).minY
+                let columnWidth = ToolRow.stackedWidth
+                meterColumn(exposure: exposure)
+                    .frame(width: columnWidth)
                     .fixedSize()
                     .rotationEffect(orientation.rotation)
-                    .position(x: turnedLeft ? geometry.size.width - topInset : topInset, y: geometry.size.height / 2)
+                    .position(x: geometry.size.width / 2, y: max(imageTop - 10 - columnWidth / 2, 50 + columnWidth / 2))
 
                 setupBlock(solution: solution, movement: movement)
                     .fixedSize()
@@ -354,7 +356,21 @@ struct ViewfinderView: View {
                     .position(x: turnedLeft ? bottomInset : geometry.size.width - bottomInset,
                               y: geometry.size.height / 2)
             }
+            .ignoresSafeArea()
             .transition(.opacity)
+        }
+    }
+
+    /// Landscape: shutter, aperture and ISO stacked, then the tools two by two.
+    private func meterColumn(exposure: ExposureSolution) -> some View {
+        VStack(spacing: 12) {
+            MeterBar(settings: exposureSettings, solution: exposure, limits: library.exposureLimits,
+                     ev100: meteredEV, readingIsClipped: camera.meterIsClipped,
+                     step: library.meterStep, isStacked: true, listRotation: orientation.rotation)
+            ToolRow(rotation: .zero, showsGrid: $showsGrid, showsMovements: movementsToggle,
+                    canResetFill: abs(fill - Framing.defaultFill) > 0.001,
+                    resetFill: { withAnimation(.smooth) { fill = Framing.defaultFill } },
+                    openSettings: { present(.settings) }, isStacked: true)
         }
     }
 
@@ -504,32 +520,65 @@ private struct ToolRow: View {
     let canResetFill: Bool
     let resetFill: () -> Void
     let openSettings: () -> Void
+    /// Two by two, for the landscape column: grid and movements, then reset and settings.
+    var isStacked = false
+
+    static let spacing: CGFloat = 8
+    /// Two tool buttons side by side; the landscape column is this wide.
+    static let stackedWidth = ToolButton.width * 2 + spacing
 
     var body: some View {
-        HStack(spacing: 10) {
-            ToolButton(systemImage: "arrow.counterclockwise", label: "Reset Frame Size", rotation: rotation) {
-                resetFill()
+        if isStacked {
+            VStack(spacing: Self.spacing) {
+                HStack(spacing: Self.spacing) {
+                    grid
+                    movements
+                }
+                HStack(spacing: Self.spacing) {
+                    reset
+                    settings
+                }
             }
-            .disabled(!canResetFill)
-            .accessibilityIdentifier("resetFrameButton")
-
-            Spacer(minLength: 0)
-            ToolButton(systemImage: "grid", label: "Grid", isOn: showsGrid, rotation: rotation) {
-                showsGrid.toggle()
+        } else {
+            HStack(spacing: 10) {
+                reset
+                Spacer(minLength: 0)
+                grid
+                movements
+                Spacer(minLength: 0)
+                settings
             }
-            .accessibilityIdentifier("gridButton")
-            ToolButton(systemImage: "arrow.up.and.down.and.arrow.left.and.right", label: "Movements",
-                       isOn: showsMovements, rotation: rotation) {
-                showsMovements.toggle()
-            }
-            .accessibilityIdentifier("movementsButton")
-            Spacer(minLength: 0)
-
-            ToolButton(systemImage: "slider.horizontal.3", label: "Settings", rotation: rotation) {
-                openSettings()
-            }
-            .accessibilityIdentifier("settingsButton")
         }
+    }
+
+    private var reset: some View {
+        ToolButton(systemImage: "arrow.counterclockwise", label: "Reset Frame Size", rotation: rotation) {
+            resetFill()
+        }
+        .disabled(!canResetFill)
+        .accessibilityIdentifier("resetFrameButton")
+    }
+
+    private var grid: some View {
+        ToolButton(systemImage: "grid", label: "Grid", isOn: showsGrid, rotation: rotation) {
+            showsGrid.toggle()
+        }
+        .accessibilityIdentifier("gridButton")
+    }
+
+    private var movements: some View {
+        ToolButton(systemImage: "arrow.up.and.down.and.arrow.left.and.right", label: "Movements",
+                   isOn: showsMovements, rotation: rotation) {
+            showsMovements.toggle()
+        }
+        .accessibilityIdentifier("movementsButton")
+    }
+
+    private var settings: some View {
+        ToolButton(systemImage: "slider.horizontal.3", label: "Settings", rotation: rotation) {
+            openSettings()
+        }
+        .accessibilityIdentifier("settingsButton")
     }
 }
 
@@ -544,7 +593,7 @@ private struct ToolButton: View {
     @Environment(\.isEnabled) private var isEnabled
     @State private var presses = 0
 
-    private static let width: CGFloat = 56
+    static let width: CGFloat = 56
     /// Matches the meter pills above.
     private static let height: CGFloat = MeterBar.height
 

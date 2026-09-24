@@ -180,10 +180,11 @@ final class TechFinderUITests: XCTestCase {
         let thirtyTwo = app.buttons["HR Digaron-S 32"]
         XCTAssertTrue(thirtyTwo.waitForExistence(timeout: 15))
         thirtyTwo.tap()
-        let notice = app.staticTexts["lensNotice"]
+        // Any element type: Liquid Glass can wrap the text.
+        let notice = app.descendants(matching: .any)["lensNotice"]
         XCTAssertTrue(notice.waitForExistence(timeout: 2), "The nickname shows")
-        XCTAssertEqual(notice.label, "HR Digaron-S 32")
-        XCTAssertTrue(notice.waitForNonExistence(timeout: 4), "and fades out")
+        XCTAssertTrue(notice.label.contains("HR Digaron-S 32"), notice.label)
+        XCTAssertTrue(notice.waitForNonExistence(timeout: 5), "and fades out")
     }
 
     func testIsoListAndFullStops() {

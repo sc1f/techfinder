@@ -315,7 +315,7 @@ struct ViewfinderView: View {
             }
             .task(id: lensNotice?.id) {
                 guard lensNotice != nil else { return }
-                try? await Task.sleep(for: .seconds(1.5))
+                try? await Task.sleep(for: .seconds(2))
                 guard !Task.isCancelled else { return }
                 withAnimation(.easeOut(duration: 0.4)) { lensNotice = nil }
             }

@@ -39,4 +39,19 @@ extension View {
         overlay(shape.stroke(.white.opacity(isActive ? 0.35 : 0), lineWidth: 1))
         #endif
     }
+
+    /// The system glass button style on iOS 26 (which menus morph out of); a solid surface elsewhere.
+    @ViewBuilder
+    func glassButtonStyle<S: Shape>(_ shape: S) -> some View {
+        #if compiler(>=6.2)
+        if #available(iOS 26.0, *) {
+            buttonStyle(.glass)
+                .buttonBorderShape(shape is Circle ? .circle : .capsule)
+        } else {
+            buttonStyle(.plain).solidSurface(shape, tint: nil)
+        }
+        #else
+        buttonStyle(.plain).solidSurface(shape, tint: nil)
+        #endif
+    }
 }

@@ -97,6 +97,14 @@ final class CameraController: @unchecked Sendable {
         }
     }
 
+    /// Brightens or darkens the automatic exposure, in stops, like dragging the Camera app's sun.
+    func setExposureBias(_ stops: Float) {
+        queue.async { [self] in
+            guard let device else { return }
+            applyExposureBias(stops, on: device)
+        }
+    }
+
     /// Returns to automatic focus and exposure for the centre of the image.
     func resetFocusAndExposure() {
         queue.async { [self] in
@@ -130,7 +138,19 @@ final class CameraController: @unchecked Sendable {
         }
     }
 
+    private func applyExposureBias(_ stops: Float, on device: AVCaptureDevice) {
+        let bias = min(max(stops, device.minExposureTargetBias), device.maxExposureTargetBias)
+        do {
+            try device.lockForConfiguration()
+            device.setExposureTargetBias(bias, completionHandler: nil)
+            device.unlockForConfiguration()
+        } catch {
+            // Exposure compensation is a convenience; framing does not depend on it.
+        }
+    }
+
     /// Continuous focus and exposure weighted to `point`, so the phone keeps adjusting there as it moves.
+    /// Any exposure compensation is cleared: it belonged to the previous point.
     private func setFocusAndExposure(on device: AVCaptureDevice, at point: CGPoint) {
         let focusMode: AVCaptureDevice.FocusMode = .continuousAutoFocus
         let exposureMode: AVCaptureDevice.ExposureMode = .continuousAutoExposure
@@ -144,6 +164,7 @@ final class CameraController: @unchecked Sendable {
                 device.exposurePointOfInterest = point
                 device.exposureMode = exposureMode
             }
+            device.setExposureTargetBias(0, completionHandler: nil)
             device.unlockForConfiguration()
         } catch {
             // Focus and metering are conveniences; framing does not depend on them.

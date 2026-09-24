@@ -24,9 +24,9 @@ public enum FormatCatalog {
         CaptureFormat(id: "film-617", name: "6×17", width: 168.0, height: 56.0, category: .mediumFormatFilm),
 
         // Large format film
-        CaptureFormat(id: "film-4x5", name: "4×5 in", width: 120.0, height: 96.0, category: .largeFormatFilm),
-        CaptureFormat(id: "film-5x7", name: "5×7 in", width: 170.0, height: 120.0, category: .largeFormatFilm),
-        CaptureFormat(id: "film-8x10", name: "8×10 in", width: 245.0, height: 194.0, category: .largeFormatFilm),
+        CaptureFormat(id: "film-4x5", name: "4×5", width: 120.0, height: 96.0, category: .largeFormatFilm),
+        CaptureFormat(id: "film-5x7", name: "5×7", width: 170.0, height: 120.0, category: .largeFormatFilm),
+        CaptureFormat(id: "film-8x10", name: "8×10", width: 245.0, height: 194.0, category: .largeFormatFilm),
 
         // Small format
         CaptureFormat(id: "36x24", name: "36 × 24", width: 36.0, height: 24.0, category: .smallFormat,

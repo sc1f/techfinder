@@ -31,6 +31,10 @@ final class DeviceOrientation {
     var isLandscape: Bool { hold != .portrait }
 
     @ObservationIgnored private let motion = CMMotionManager()
+    /// An orientation must be held this long before the interface turns, so passing through 45° doesn't flicker.
+    @ObservationIgnored private let settleTime: TimeInterval = 0.2
+    @ObservationIgnored private var candidate: Hold?
+    @ObservationIgnored private var candidateSince = Date.distantPast
 
     init() {
         #if DEBUG
@@ -42,7 +46,7 @@ final class DeviceOrientation {
         }
         #endif
         guard motion.isDeviceMotionAvailable else { return }
-        motion.deviceMotionUpdateInterval = 0.1
+        motion.deviceMotionUpdateInterval = 0.05
         motion.startDeviceMotionUpdates(to: .main) { [weak self] data, _ in
             guard let self, let gravity = data?.gravity else { return }
             self.update(x: gravity.x, y: gravity.y, z: gravity.z)
@@ -66,7 +70,15 @@ final class DeviceOrientation {
         } else {
             return // Upside down or ambiguous.
         }
-        if next != hold {
+        guard next != hold else {
+            candidate = nil
+            return
+        }
+        if next != candidate {
+            candidate = next
+            candidateSince = Date()
+        } else if Date().timeIntervalSince(candidateSince) >= settleTime {
+            candidate = nil
             hold = next
         }
     }

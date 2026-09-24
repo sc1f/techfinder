@@ -15,6 +15,9 @@ struct ViewfinderView: View {
     @State private var panel: Sheet?
     @State private var tip: HoldTip?
     @State private var focusMarker: FocusMarker?
+    /// Exposure compensation in stops for the current focus point, set by dragging after a tap.
+    @State private var exposureBias: Float = 0
+    @State private var exposureDragStart: Float?
     @AppStorage("frameFill") private var fill = Framing.defaultFill
     @AppStorage("showsGrid") private var showsGrid = false
     @State private var pinchStartFill: Double?
@@ -28,6 +31,9 @@ struct ViewfinderView: View {
         let id = UUID()
         let location: CGPoint
     }
+
+    /// The one animation for everything that moves when the phone turns.
+    static let turn = Animation.spring(response: 0.42, dampingFraction: 0.86)
 
     private var solution: FramingSolution? {
         guard let lens = library.selectedLens else { return nil }
@@ -72,7 +78,7 @@ struct ViewfinderView: View {
                     FrameOverlay(solution: solution, showsGrid: showsGrid)
                 }
                 if let focusMarker {
-                    FocusSquare()
+                    FocusSquare(exposureBias: exposureBias, isAdjusting: exposureDragStart != nil)
                         .position(focusMarker.location)
                         .id(focusMarker.id)
                         .transition(.opacity)
@@ -83,6 +89,7 @@ struct ViewfinderView: View {
             .onTapGesture { location in
                 focus(at: location, in: imageRect.size)
             }
+            .gesture(exposureDrag)
             .position(x: imageRect.midX, y: imageRect.midY)
         }
         .ignoresSafeArea()
@@ -113,19 +120,27 @@ struct ViewfinderView: View {
                 .padding(.bottom, 8)
         }
         .padding(.horizontal, 16)
-        .overlay(alignment: orientation.hold == .landscapeRight ? .bottomLeading : .topTrailing) {
-            if orientation.isLandscape {
-                // The viewer's top-left corner: the screen's top-right when the phone is turned left,
-                // its bottom-left (above the lens pill) when turned right.
-                MenuButton(rotation: orientation.rotation, showsGrid: $showsGrid,
-                           canResetFill: abs(fill - Framing.defaultFill) > 0.001,
-                           resetFill: { withAnimation(.smooth) { fill = Framing.defaultFill } })
-                    .padding(.horizontal, 16)
-                    .padding(orientation.hold == .landscapeRight ? .bottom : .top,
-                             orientation.hold == .landscapeRight ? 8 + 48 + 16 : 8)
-                    .transition(.opacity)
-            }
+        .overlay {
+            menu
         }
+    }
+
+    /// The menu sits in the viewer's top-left corner and slides there as the phone turns: the screen's
+    /// top-left in portrait, top-right when turned left, bottom-left (above the lenses) when turned right.
+    private var menu: some View {
+        let alignment: Alignment = switch orientation.hold {
+        case .portrait: .topLeading
+        case .landscapeLeft: .topTrailing
+        case .landscapeRight: .bottomLeading
+        }
+        let insets = EdgeInsets(top: 8, leading: 16, bottom: orientation.hold == .landscapeRight ? 8 + 48 + 16 : 8,
+                                trailing: 16)
+
+        return MenuButton(rotation: orientation.rotation, showsGrid: $showsGrid,
+                          canResetFill: abs(fill - Framing.defaultFill) > 0.001,
+                          resetFill: { withAnimation(.smooth) { fill = Framing.defaultFill } })
+            .padding(insets)
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: alignment)
     }
 
     // MARK: - Behaviour
@@ -133,13 +148,14 @@ struct ViewfinderView: View {
     private func lifecycle(_ content: some View, solution: FramingSolution?) -> some View {
         content
             .animation(.smooth(duration: 0.2), value: tip)
-            .animation(.smooth, value: orientation.hold)
+            .animation(Self.turn, value: orientation.hold)
             .statusBarHidden()
             .persistentSystemOverlays(.hidden)
             .onChange(of: solution?.zoom ?? 1, initial: true) { _, zoom in
                 camera.setZoom(zoom)
-                // The camera returns to automatic focus for a new framing.
+                // The camera returns to automatic focus and exposure for a new framing.
                 focusMarker = nil
+                exposureBias = 0
             }
             .task(id: tip) {
                 guard tip != nil else { return }
@@ -276,15 +292,32 @@ struct ViewfinderView: View {
         guard size.width > 0, size.height > 0 else { return }
         if let focusMarker, hypot(focusMarker.location.x - location.x, focusMarker.location.y - location.y) < 40 {
             camera.resetFocusAndExposure()
+            exposureBias = 0
             withAnimation(.smooth(duration: 0.2)) { self.focusMarker = nil }
             return
         }
+        exposureBias = 0
         // The preview is the landscape sensor image turned 90° clockwise.
         let devicePoint = CGPoint(x: location.y / size.height, y: 1 - location.x / size.width)
         camera.focusAndMeter(at: devicePoint)
         withAnimation(.smooth(duration: 0.2)) {
             focusMarker = FocusMarker(location: location)
         }
+    }
+
+    /// After a tap, dragging up brightens and down darkens, about one stop per 100 points, within ±2 stops.
+    private var exposureDrag: some Gesture {
+        DragGesture(minimumDistance: 8)
+            .onChanged { value in
+                guard focusMarker != nil else { return }
+                let start = exposureDragStart ?? exposureBias
+                exposureDragStart = start
+                exposureBias = min(max(start - Float(value.translation.height / 100), -2), 2)
+                camera.setExposureBias(exposureBias)
+            }
+            .onEnded { _ in
+                exposureDragStart = nil
+            }
     }
 
     private var pinchToAdjustFill: some Gesture {
@@ -321,8 +354,11 @@ struct ViewfinderView: View {
 }
 
 /// Camera-app style focus square: settles into place where the user tapped, then dims while the point
-/// stays active.
+/// stays active. A sun beside it shows exposure compensation, moving up as the image brightens.
 private struct FocusSquare: View {
+    let exposureBias: Float
+    let isAdjusting: Bool
+
     @State private var settled = false
     @State private var dimmed = false
 
@@ -330,8 +366,21 @@ private struct FocusSquare: View {
         Rectangle()
             .stroke(Color.accentColor, lineWidth: 1.5)
             .frame(width: 72, height: 72)
+            .overlay(alignment: .trailing) {
+                VStack(spacing: 2) {
+                    Image(systemName: "sun.max.fill")
+                        .font(.system(size: 13, weight: .semibold))
+                    if isAdjusting || exposureBias != 0 {
+                        Text(String(format: "%+.1f", exposureBias))
+                            .font(.system(size: 10, weight: .semibold).monospacedDigit())
+                    }
+                }
+                .foregroundStyle(Color.accentColor)
+                .offset(x: 26, y: CGFloat(-exposureBias) * 18)
+            }
             .scaleEffect(settled ? 1 : 1.35)
-            .opacity(dimmed ? 0.45 : 1)
+            .opacity(dimmed && !isAdjusting ? 0.45 : 1)
+            .animation(.smooth(duration: 0.15), value: isAdjusting)
             .allowsHitTesting(false)
             .task {
                 withAnimation(.smooth(duration: 0.25)) { settled = true }
@@ -343,7 +392,7 @@ private struct FocusSquare: View {
 
 // MARK: - Top bar
 
-/// The menu at the leading edge, the lens button centred on screen and the format button to its left.
+/// The menu at the leading edge, the lens button centred on screen and the format button to its right.
 /// When the setup is wider than the phone can see, a warning tag hangs under the lens button.
 private struct TopBar: View {
     let lens: Lens?
@@ -361,29 +410,25 @@ private struct TopBar: View {
 
     var body: some View {
         TopBarLayout(spacing: 8) {
-            MenuButton(rotation: rotation, showsGrid: $showsGrid, canResetFill: canResetFill, resetFill: resetFill)
-                // In landscape the menu moves to the viewer's top-left corner instead.
-                .opacity(showsSetup ? 1 : 0)
-                .allowsHitTesting(showsSetup)
+            // Room for the menu, which is drawn by the viewfinder so it can slide between corners as
+            // the phone turns.
+            Color.clear
+                .frame(width: height, height: height)
 
             HoldTipControl(tip: HoldTip(title: "Format", detail: "Tap to choose the back or film format", placement: .top),
                            shownTip: $tip) {
                 present(.formats)
             } label: {
-                VStack(spacing: 1) {
-                    Text(format.name)
-                        .font(.footnote.weight(.semibold))
-                    Text("Format")
-                        .font(.caption2)
-                        .foregroundStyle(.secondary)
-                }
-                .lineLimit(1)
-                .padding(.horizontal, 16)
-                .frame(height: height)
+                Text(format.name)
+                    .font(.footnote.weight(.semibold))
+                    .lineLimit(1)
+                    .padding(.horizontal, 16)
+                    .frame(height: height)
             }
             .glassSurface(Capsule(), interactive: true)
             .opacity(showsSetup ? 1 : 0)
             .allowsHitTesting(showsSetup)
+            .accessibilityIdentifier("formatButton")
 
             HoldTipControl(tip: HoldTip(title: "Lenses", detail: "Tap to add, edit and choose lenses", placement: .top),
                            shownTip: $tip) {
@@ -397,6 +442,7 @@ private struct TopBar: View {
             .glassSurface(Capsule(), interactive: true)
             .opacity(showsSetup ? 1 : 0)
             .allowsHitTesting(showsSetup)
+            .accessibilityIdentifier("lensButton")
 
             if showsSetup, solution?.isClipped == true {
                 Text("Wider than the iPhone can see")
@@ -436,17 +482,19 @@ private struct MenuButton: View {
                 .font(.system(size: 18, weight: .medium))
                 .foregroundStyle(.white)
                 .rotationEffect(rotation)
-                .animation(.smooth, value: rotation)
+                .animation(ViewfinderView.turn, value: rotation)
                 .frame(width: size, height: size)
                 .contentShape(Circle())
         }
-        .glassSurface(Circle(), interactive: true)
+        // The system glass button style, so iOS 26 can morph the menu out of the button itself.
+        .glassButtonStyle(Circle())
         .accessibilityLabel("Menu")
+        .accessibilityIdentifier("menu")
     }
 }
 
 /// Places the top bar: the menu at the leading edge, the lens button centred on screen with the format
-/// button beside it on the left. If the format button would run into the menu, both shift right; if
+/// button beside it on the right. If the format button would run off the edge, both shift left; if
 /// there still isn't room, the lens button narrows. An optional fourth view hangs centred under the lens.
 private struct TopBarLayout: Layout {
     var spacing: CGFloat
@@ -467,12 +515,13 @@ private struct TopBarLayout: Layout {
 
         subviews[0].place(at: CGPoint(x: bounds.minX, y: midY), anchor: .leading, proposal: ProposedViewSize(menu))
 
-        let earliestLens = bounds.minX + menu.width + spacing + format.width + spacing
-        let lensWidth = min(lensIdeal.width, bounds.maxX - earliestLens)
-        let lensX = min(max(bounds.midX - lensWidth / 2, earliestLens), bounds.maxX - lensWidth)
+        let earliestLens = bounds.minX + menu.width + spacing
+        let latestLensEnd = bounds.maxX - spacing - format.width
+        let lensWidth = min(lensIdeal.width, latestLensEnd - earliestLens)
+        let lensX = max(min(bounds.midX - lensWidth / 2, latestLensEnd - lensWidth), earliestLens)
         subviews[2].place(at: CGPoint(x: lensX, y: midY), anchor: .leading,
                           proposal: ProposedViewSize(width: lensWidth, height: lensIdeal.height))
-        subviews[1].place(at: CGPoint(x: lensX - spacing - format.width, y: midY), anchor: .leading,
+        subviews[1].place(at: CGPoint(x: lensX + lensWidth + spacing, y: midY), anchor: .leading,
                           proposal: ProposedViewSize(format))
 
         if subviews.count > 3 {

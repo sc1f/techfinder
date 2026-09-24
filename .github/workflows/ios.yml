@@ -126,8 +126,9 @@ jobs:
           path: ${{ runner.temp }}/TechFinder-unsigned.zip
           retention-days: 30
 
+      # Includes the UI tests' screenshots (menu open, sheets); upload even on success for review.
       - name: Upload test results
-        if: failure()
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: test-results

@@ -38,6 +38,11 @@ private struct NativeLensPicker: View {
     @Environment(LibraryStore.self) private var library
     let rotation: Angle
 
+    /// The rotation the labels are drawn at. It trails `rotation` so the control can fade out, swap its
+    /// labels while hidden and fade back in, instead of snapping to new label sizes.
+    @State private var labelRotation: Angle?
+    @State private var labelOpacity = 1.0
+
     private var selection: Binding<Lens.ID?> {
         Binding(get: { library.selectedLensID }, set: { library.selectedLensID = $0 })
     }
@@ -53,11 +58,21 @@ private struct NativeLensPicker: View {
         .pickerStyle(.segmented)
         .controlSize(.large)
         .fixedSize()
+        .opacity(labelOpacity)
         .frame(maxWidth: .infinity)
+        .onChange(of: rotation) { _, newRotation in
+            withAnimation(.easeIn(duration: 0.12)) {
+                labelOpacity = 0
+            } completion: {
+                labelRotation = newRotation
+                withAnimation(.easeOut(duration: 0.22)) { labelOpacity = 1 }
+            }
+        }
     }
 
     @ViewBuilder
     private func label(for lens: Lens) -> some View {
+        let rotation = labelRotation ?? self.rotation
         if rotation == .zero {
             Text("\(lens.focalLengthLabel)mm")
         } else {
@@ -110,7 +125,7 @@ struct RoundGlassControl: View {
                 .font(.system(size: size * 0.375, weight: .medium))
                 .foregroundStyle(isOn ? Color.accentColor : .white)
                 .rotationEffect(rotation)
-                .animation(.smooth, value: rotation)
+                .animation(ViewfinderView.turn, value: rotation)
                 .frame(width: size, height: size)
         }
         .glassSurface(Circle(), interactive: true)
@@ -262,7 +277,7 @@ private struct LensCarousel: View {
             }
             .fixedSize()
             .rotationEffect(rotation)
-            .animation(.smooth, value: rotation)
+            .animation(ViewfinderView.turn, value: rotation)
             .foregroundStyle(isSelected ? Color.accentColor : .white)
             .padding(.horizontal, 12)
             .frame(minWidth: minItemWidth)

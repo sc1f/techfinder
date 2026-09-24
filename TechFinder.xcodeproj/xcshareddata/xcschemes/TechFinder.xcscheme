@@ -50,6 +50,17 @@
                ReferencedContainer = "container:Packages/TechFinderCore">
             </BuildableReference>
          </TestableReference>
+         <TestableReference
+            skipped = "NO"
+            parallelizable = "NO">
+            <BuildableReference
+               BuildableIdentifier = "primary"
+               BlueprintIdentifier = "4EFB1782D005428ADCE032A5"
+               BuildableName = "TechFinderUITests.xctest"
+               BlueprintName = "TechFinderUITests"
+               ReferencedContainer = "container:TechFinder.xcodeproj">
+            </BuildableReference>
+         </TestableReference>
       </Testables>
       <CommandLineArguments>
       </CommandLineArguments>

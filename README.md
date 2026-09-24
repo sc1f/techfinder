@@ -10,9 +10,9 @@ A minimal iPhone viewfinder for technical-camera photographers. Choose a lens an
 - **Lens library.** Add, edit and delete lenses (focal length plus optional name). The list is sorted wide to long, and the angles of view shown are for the current format.
 - **Formats.** Digital backs are grouped by sensor size with their models listed (53.4 × 40, 53.7 × 40.4, 44 × 33, 45 × 30, 36 × 24). Film covers medium format (6×4.5 to 6×17) and large format (4×5, 5×7, 8×10). You can add custom formats.
 - **Controls.**
-  - The top bar has the menu (grid, reset frame size), the lens button centred on screen, and the format button beside it. Tap lens or format to change them.
+  - The top bar has the menu (grid, reset frame size), the lens button centred on screen, and the format button to its right. Tap lens or format to change them.
   - The lens selector at the bottom is Apple's segmented control. On iOS 26 the selection lifts into a glass lens as you drag across it, as in the Photos app. When there are more lenses than fit, it becomes a sliding pill like the Camera app's mode switcher.
-  - Tap the image to focus and meter at that point. Tap again elsewhere to move it, or tap the square to return to automatic.
+  - Tap the image to focus and meter at that point, then drag up or down to brighten or darken, like the Camera app's sun. Tap elsewhere to move the point, or tap the square to return to automatic.
   - Press and hold any control or lens for a tip.
 - **Landscape.** Hold the phone sideways and the readout and menu move to the viewer's top edge. Lenses and Format open as rotated cards.
 - **Readout.** The lens button shows the long × short angle of view and the full-frame-equivalent focal length. When the setup is wider than the iPhone's ultra-wide can see, the frame turns orange and the button adds a warning line.
@@ -45,7 +45,7 @@ Packages/TechFinderCore/     models, format catalog, framing math, persistence, 
 
 `.github/workflows/ios.yml` runs on a macOS 26 runner with the latest stable Xcode.
 
-- **Every push and pull request:** builds and runs the tests on an iPhone Simulator. It then launches the app in four states (portrait, the Lenses sheet, and both landscape holds) and fails if the app is stuck at full CPU. Screenshots of each state are saved as the `screenshots` artifact.
+- **Every push and pull request:** builds and runs the unit tests and the UI tests (which open the menu and sheets) on an iPhone Simulator. It then launches the app in four states (portrait, the Lenses sheet, and both landscape holds) and fails if the app is stuck at full CPU. Screenshots of each state are saved as the `screenshots` artifact.
 - **TestFlight:** runs from *Actions › iOS › Run workflow*, or when you push a tag such as `v0.1.0`. It archives, signs, and uploads to TestFlight. The build number is the workflow run number.
 
 - **Unsigned iPhone build:** every push to `main` also saves an unsigned build of the app, made with the latest Xcode.

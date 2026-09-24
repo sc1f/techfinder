@@ -54,6 +54,19 @@ targets:
         SUPPORTS_MACCATALYST: NO
         SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD: NO
         SUPPORTS_XR_DESIGNED_FOR_IPHONE_IPAD: NO
+  TechFinderUITests:
+    type: bundle.ui-testing
+    platform: iOS
+    sources:
+      - path: TechFinderUITests
+    dependencies:
+      - target: TechFinder
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.scif.TechFinderUITests
+        TARGETED_DEVICE_FAMILY: "1"
+        GENERATE_INFOPLIST_FILE: YES
+        CODE_SIGN_STYLE: Automatic
 schemes:
   TechFinder:
     build:
@@ -65,5 +78,6 @@ schemes:
       config: Debug
       targets:
         - package: TechFinderCore/TechFinderCoreTests
+        - TechFinderUITests
     archive:
       config: Release

@@ -5,9 +5,9 @@ import TechFinderCore
 ///
 /// Right (arrow or swipe) raises a value: higher ISO, a higher f-number, a faster shutter. Steps are full
 /// stops or thirds, as set in Settings. ISO is always set by hand, and so is one of aperture and
-/// shutter (lock icon); the meter gives the other (A). Tapping or moving the metered value makes it the
-/// one set by hand. Tapping ISO lists the ISOs to choose from. Values outside the equipment limits turn
-/// orange.
+/// shutter (lock icon); the meter gives the other (A). Tapping a value lists the values within the
+/// equipment limits to pick from; picking or moving the metered value makes it the one set by hand.
+/// Values outside the equipment limits turn orange.
 struct MeterBar: View {
     @Binding var settings: ExposureSettings
     let solution: ExposureSolution
@@ -47,13 +47,19 @@ struct MeterBar: View {
             canLower: direction > 0 ? index > range.lowerBound : index < range.upperBound,
             canRaise: direction > 0 ? index < range.upperBound : index > range.lowerBound,
             change: { steps in settings.step(axis, by: steps * direction, thirdsPerStep: step, from: solution) },
-            lock: axis == .iso ? nil : { settings.lock(axis, from: solution) },
-            // Tapping ISO lists the ISOs within the equipment limits, to jump straight to one.
-            choices: axis == .iso ? limits.iso.map { ($0, ExposureScale.label(.iso, $0)) } : nil,
+            choices: choices(axis, current: index),
             selectedChoice: index,
             select: { settings.set(axis, to: $0) }
         )
         .accessibilityIdentifier("meter-\(axis.rawValue)")
+    }
+
+    /// Every value within the equipment limits, in thirds, plus the current one if it is outside them.
+    /// Shutter speeds run fast to slow.
+    private func choices(_ axis: ExposureAxis, current: Int) -> [(index: Int, label: String)] {
+        let range = limits.range(axis)
+        let indices = min(range.lowerBound, current)...max(range.upperBound, current)
+        return indices.filter { range.contains($0) || $0 == current }.map { ($0, ExposureScale.label(axis, $0)) }
     }
 }
 
@@ -69,11 +75,10 @@ private struct MeterDial: View {
     let canRaise: Bool
     /// Raises (positive) or lowers (negative) the value by a number of steps.
     let change: (Int) -> Void
-    let lock: (() -> Void)?
-    /// Values to pick from when the value is tapped, instead of locking.
-    var choices: [(index: Int, label: String)]? = nil
-    var selectedChoice: Int = 0
-    var select: (Int) -> Void = { _ in }
+    /// Values to pick from when the value is tapped.
+    let choices: [(index: Int, label: String)]
+    let selectedChoice: Int
+    let select: (Int) -> Void
 
     /// Steps already applied during the current swipe.
     @State private var swipeSteps = 0
@@ -107,27 +112,18 @@ private struct MeterDial: View {
         }
     }
 
-    /// The caption and value. Tapping locks it, or opens the list of choices; swiping steps it.
+    /// The caption and value. Tapping opens the list of choices; swiping steps it.
     private var valueArea: some View {
         valueLabel
-            .onTapGesture {
-                if choices != nil {
-                    showsChoices = true
-                } else if let lock {
-                    lock()
-                    ticks += 1
-                }
-            }
+            .onTapGesture { showsChoices = true }
             .gesture(swipe)
             .popover(isPresented: $showsChoices) {
-                if let choices {
-                    ChoiceList(title: caption, choices: choices, selected: selectedChoice) { index in
-                        select(index)
-                        ticks += 1
-                        showsChoices = false
-                    }
-                    .presentationCompactAdaptation(.popover)
+                ChoiceList(title: caption, choices: choices, selected: selectedChoice) { index in
+                    select(index)
+                    ticks += 1
+                    showsChoices = false
                 }
+                .presentationCompactAdaptation(.popover)
             }
     }
 
@@ -221,7 +217,11 @@ private struct ChoiceList: View {
                 .accessibilityAddTraits(choice.index == selected ? .isSelected : [])
             }
             .listStyle(.plain)
-            .onAppear { proxy.scrollTo(selected, anchor: .center) }
+            .task {
+                // After the list's first layout, or it has no rows to scroll to yet.
+                await Task.yield()
+                proxy.scrollTo(selected, anchor: .center)
+            }
         }
         .frame(width: 160, height: 300)
         .accessibilityIdentifier("choices")

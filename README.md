@@ -12,8 +12,8 @@ A minimal iPhone viewfinder for technical-camera photographers. Choose a lens an
 - **Light meter.**
   - The top bar shows ISO, aperture and shutter. Tap an arrow or swipe along a value to change it. Right raises the value (higher ISO, higher f-number, faster shutter); left lowers it.
   - Steps are full stops by default, landing on the standard series (ISO 100, 200, 400…; f/5.6, 8, 11…; 1/125, 1/250…), or ⅓ stop in Settings.
-  - Tap ISO for a list of ISOs within your limits.
-  - ISO is always set by hand, and so is either the aperture or the shutter (lock icon). The meter gives the other (A). Tap the metered value, or change it, to set it by hand instead.
+  - Tap ISO, aperture or shutter for a list of values within your limits. Picking the metered value sets it by hand.
+  - ISO is always set by hand, and so is either the aperture or the shutter (lock icon). The meter gives the other (A). Pick the metered value from its list, or change it, to set it by hand instead.
 - **Spot meter.**
   - The meter reads a 3° spot, drawn as a circle at the centre cross (the moved frame's centre with movements on). It converts the spot's brightness to EV at ISO 100 using the camera's exposure, so a mid-grey spot reads correct.
   - The ISO pill shows the live reading as EV at ISO 100. To calibrate, meter a grey card with a handheld spot meter and set any consistent difference in Settings › Calibration.

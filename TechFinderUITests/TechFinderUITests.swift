@@ -46,8 +46,23 @@ final class TechFinderUITests: XCTestCase {
 
         let shutter = app.otherElements["meter-shutter"].firstMatch
         XCTAssertTrue(shutter.waitForExistence(timeout: 15), "Light meter should appear")
-        shutter.tap() // Hold the shutter; the aperture follows the meter.
+        // Tapping the shutter lists speeds; picking one holds it, and the aperture follows the meter.
+        shutter.tap()
+        let speed = app.buttons["1/125"].firstMatch
+        XCTAssertTrue(speed.waitForExistence(timeout: 5), "Tapping the shutter lists shutter speeds")
+        attachScreenshot(of: app, named: "shutter-list")
+        speed.tap()
+        XCTAssertEqual(shutter.value as? String, "1/125")
         attachScreenshot(of: app, named: "meter-shutter-locked")
+
+        let aperture = app.otherElements["meter-aperture"].firstMatch
+        aperture.tap()
+        // The list opens at the metered aperture, f/5.6 here; pick the next one to hold it.
+        let next = app.buttons["f/6.3"].firstMatch
+        XCTAssertTrue(next.waitForExistence(timeout: 5), "Tapping the aperture lists apertures")
+        attachScreenshot(of: app, named: "aperture-list")
+        next.tap()
+        XCTAssertEqual(aperture.value as? String, "f/6.3")
 
         let settings = app.buttons["settingsButton"]
         XCTAssertTrue(settings.waitForExistence(timeout: 5))
@@ -125,17 +140,17 @@ final class TechFinderUITests: XCTestCase {
         XCTAssertTrue(iso.waitForExistence(timeout: 15))
         XCTAssertEqual(iso.value as? String, "100")
 
-        // Tapping the value lists the ISOs; pick 250.
+        // Tapping the value lists the ISOs, opened at the current one; pick 160.
         iso.tap()
-        let choice = app.buttons["250"].firstMatch
+        let choice = app.buttons["160"].firstMatch
         XCTAssertTrue(choice.waitForExistence(timeout: 5), "Tapping ISO lists the ISOs")
         attachScreenshot(of: app, named: "iso-list")
         choice.tap()
-        XCTAssertEqual(iso.value as? String, "250")
+        XCTAssertEqual(iso.value as? String, "160")
 
-        // A full-stop step from 250 lands on the standard series: 400.
+        // A full-stop step from 160 lands on the standard series: 200.
         iso.coordinate(withNormalizedOffset: CGVector(dx: 0.93, dy: 0.5)).tap()
-        XCTAssertEqual(iso.value as? String, "400")
+        XCTAssertEqual(iso.value as? String, "200")
     }
 
     func testLensSelectorTapAndDrag() {

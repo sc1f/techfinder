@@ -3,6 +3,12 @@ import SwiftUI
 // Liquid Glass needs the iOS 26 SDK (Xcode 26, Swift 6.2) and iOS 26. Everywhere else the controls are
 // solid dark shapes. The background is plain black either way.
 
+/// The padding the iOS 26 glass button style puts around a label (measured from its rendering), so
+/// labels can be sized to give an exact outer size.
+enum GlassButtonMetrics {
+    static let padding = EdgeInsets(top: 7, leading: 12, bottom: 7, trailing: 12)
+}
+
 extension View {
     /// Places the view on a glass surface of the given shape.
     @ViewBuilder
@@ -40,7 +46,8 @@ extension View {
         #endif
     }
 
-    /// The system glass button style on iOS 26 (which menus morph out of); a solid surface elsewhere.
+    /// The system glass button style on iOS 26 (which menus morph out of); a solid surface elsewhere,
+    /// padded by the same amount so the button is the same size either way.
     @ViewBuilder
     func glassButtonStyle<S: Shape>(_ shape: S) -> some View {
         #if compiler(>=6.2)
@@ -48,10 +55,10 @@ extension View {
             buttonStyle(.glass)
                 .buttonBorderShape(shape is Circle ? .circle : .capsule)
         } else {
-            buttonStyle(.plain).solidSurface(shape, tint: nil)
+            buttonStyle(.plain).padding(GlassButtonMetrics.padding).solidSurface(shape, tint: nil)
         }
         #else
-        buttonStyle(.plain).solidSurface(shape, tint: nil)
+        buttonStyle(.plain).padding(GlassButtonMetrics.padding).solidSurface(shape, tint: nil)
         #endif
     }
 }

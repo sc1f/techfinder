@@ -18,6 +18,8 @@ struct ViewfinderView: View {
     /// Exposure compensation in stops for the current focus point, set by dragging after a tap.
     @State private var exposureBias: Float = 0
     @State private var exposureDragStart: Float?
+    /// Bumped by every touch on the image; the focus square hides after 3 s without one.
+    @State private var focusActivity = 0
     @AppStorage("frameFill") private var fill = Framing.defaultFill
     @AppStorage("showsGrid") private var showsGrid = false
     @State private var pinchStartFill: Double?
@@ -156,6 +158,13 @@ struct ViewfinderView: View {
                 // The camera returns to automatic focus and exposure for a new framing.
                 focusMarker = nil
                 exposureBias = 0
+            }
+            .task(id: focusActivity) {
+                // Hide the focus square after 3 s without a touch; the point stays active.
+                guard focusMarker != nil else { return }
+                try? await Task.sleep(for: .seconds(3))
+                guard !Task.isCancelled, exposureDragStart == nil else { return }
+                withAnimation(.easeOut(duration: 0.4)) { focusMarker = nil }
             }
             .task(id: tip) {
                 guard tip != nil else { return }
@@ -297,6 +306,7 @@ struct ViewfinderView: View {
             return
         }
         exposureBias = 0
+        focusActivity += 1
         // The preview is the landscape sensor image turned 90° clockwise.
         let devicePoint = CGPoint(x: location.y / size.height, y: 1 - location.x / size.width)
         camera.focusAndMeter(at: devicePoint)
@@ -317,6 +327,7 @@ struct ViewfinderView: View {
             }
             .onEnded { _ in
                 exposureDragStart = nil
+                focusActivity += 1
             }
     }
 
@@ -353,14 +364,13 @@ struct ViewfinderView: View {
     }
 }
 
-/// Camera-app style focus square: settles into place where the user tapped, then dims while the point
-/// stays active. A sun beside it shows exposure compensation, moving up as the image brightens.
+/// Camera-app style focus square: settles into place where the user tapped. A sun beside it shows
+/// exposure compensation, moving up as the image brightens. The viewfinder hides it after 3 s idle.
 private struct FocusSquare: View {
     let exposureBias: Float
     let isAdjusting: Bool
 
     @State private var settled = false
-    @State private var dimmed = false
 
     var body: some View {
         Rectangle()
@@ -379,13 +389,9 @@ private struct FocusSquare: View {
                 .offset(x: 26, y: CGFloat(-exposureBias) * 18)
             }
             .scaleEffect(settled ? 1 : 1.35)
-            .opacity(dimmed && !isAdjusting ? 0.45 : 1)
-            .animation(.smooth(duration: 0.15), value: isAdjusting)
             .allowsHitTesting(false)
-            .task {
+            .onAppear {
                 withAnimation(.smooth(duration: 0.25)) { settled = true }
-                try? await Task.sleep(for: .seconds(1.5))
-                withAnimation(.easeOut(duration: 0.5)) { dimmed = true }
             }
     }
 }
@@ -413,7 +419,7 @@ private struct TopBar: View {
             // Room for the menu, which is drawn by the viewfinder so it can slide between corners as
             // the phone turns.
             Color.clear
-                .frame(width: height, height: height)
+                .frame(width: MenuButton.size.width, height: MenuButton.size.height)
 
             HoldTipControl(tip: HoldTip(title: "Format", detail: "Tap to choose the back or film format", placement: .top),
                            shownTip: $tip) {
@@ -466,7 +472,11 @@ private struct MenuButton: View {
     let canResetFill: Bool
     let resetFill: () -> Void
 
-    private let size: CGFloat = 48
+    /// Outer size, matching the lens and format pills. The glass button style adds its own padding
+    /// (`GlassButtonMetrics.padding`) around the label.
+    static let size = CGSize(width: 64, height: 48)
+
+    @State private var presses = 0
 
     var body: some View {
         Menu {
@@ -483,11 +493,14 @@ private struct MenuButton: View {
                 .foregroundStyle(.white)
                 .rotationEffect(rotation)
                 .animation(ViewfinderView.turn, value: rotation)
-                .frame(width: size, height: size)
-                .contentShape(Circle())
+                .frame(width: Self.size.width - GlassButtonMetrics.padding.leading - GlassButtonMetrics.padding.trailing,
+                       height: Self.size.height - GlassButtonMetrics.padding.top - GlassButtonMetrics.padding.bottom)
+                .contentShape(Capsule())
         }
         // The system glass button style, so iOS 26 can morph the menu out of the button itself.
-        .glassButtonStyle(Circle())
+        .glassButtonStyle(Capsule())
+        .simultaneousGesture(TapGesture().onEnded { presses += 1 })
+        .sensoryFeedback(.impact(weight: .medium, intensity: 1), trigger: presses)
         .accessibilityLabel("Menu")
         .accessibilityIdentifier("menu")
     }

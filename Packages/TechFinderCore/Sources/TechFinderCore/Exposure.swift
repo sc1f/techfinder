@@ -59,6 +59,33 @@ public enum ExposureScale {
     /// Fractional shutter index for an exposure time.
     static func shutterIndex(forSeconds t: Double) -> Double { Double(oneSecond) + 3 * log2(t) }
 
+    /// Moves an index by `steps` of `thirdsPerStep`. Full-stop steps land on the standard full-stop series
+    /// (ISO 100, 200, 400…; f/5.6, 8, 11…; 1/125, 1/250…): from an in-between value the first step goes to
+    /// the next full stop in that direction.
+    public static func stepped(_ index: Int, by steps: Int, thirdsPerStep: Int, axis: ExposureAxis) -> Int {
+        guard steps != 0 else { return index }
+        let range = range(axis)
+        guard thirdsPerStep == 3 else {
+            return min(max(index + steps * thirdsPerStep, range.lowerBound), range.upperBound)
+        }
+        // Full stops sit on every third index from the anchor (ISO 100, f/1, one second).
+        let anchor = axis == .iso ? iso100 : (axis == .shutter ? oneSecond : 0)
+        let offset = ((index - anchor) % 3 + 3) % 3
+        var result: Int
+        if steps > 0 {
+            result = index + (offset == 0 ? 3 : 3 - offset) + 3 * (steps - 1)
+        } else {
+            result = index - (offset == 0 ? 3 : offset) + 3 * (steps + 1)
+        }
+        return min(max(result, range.lowerBound), range.upperBound)
+    }
+
+    /// Whether an index is on the standard full-stop series.
+    public static func isFullStop(_ index: Int, axis: ExposureAxis) -> Bool {
+        let anchor = axis == .iso ? iso100 : (axis == .shutter ? oneSecond : 0)
+        return (index - anchor) % 3 == 0
+    }
+
     public static func label(_ axis: ExposureAxis, _ index: Int) -> String {
         let labels = labels(axis)
         let text = labels[min(max(index, 0), labels.count - 1)]
@@ -115,18 +142,26 @@ public struct ExposureSettings: Codable, Equatable, Sendable {
         mode == .aperturePriority ? .aperture : .shutter
     }
 
-    /// Moves one axis by `delta` thirds, starting from what is shown in `solution`. Moving the metered
-    /// value makes it the one set by hand, and the meter then gives the other.
-    public mutating func step(_ axis: ExposureAxis, by delta: Int, from solution: ExposureSolution) {
+    /// Moves one axis along its scale by `steps`, each `thirdsPerStep` thirds of a stop, starting from what
+    /// is shown in `solution`. Positive steps go up the scale's index (higher ISO, higher f-number, longer
+    /// shutter). Moving the metered value makes it the one set by hand, and the meter then gives the other.
+    public mutating func step(_ axis: ExposureAxis, by steps: Int, thirdsPerStep: Int = 1, from solution: ExposureSolution) {
+        let index = ExposureScale.stepped(solution.index(axis), by: steps, thirdsPerStep: thirdsPerStep, axis: axis)
+        set(axis, to: index)
+    }
+
+    /// Sets one axis to a scale index. Setting the metered value makes it the one set by hand.
+    public mutating func set(_ axis: ExposureAxis, to index: Int) {
         let range = ExposureScale.range(axis)
+        let index = min(max(index, range.lowerBound), range.upperBound)
         switch axis {
         case .iso:
-            isoIndex = min(max(isoIndex + delta, range.lowerBound), range.upperBound)
+            isoIndex = index
         case .aperture:
-            apertureIndex = min(max(solution.apertureIndex + delta, range.lowerBound), range.upperBound)
+            apertureIndex = index
             mode = .aperturePriority
         case .shutter:
-            shutterIndex = min(max(solution.shutterIndex + delta, range.lowerBound), range.upperBound)
+            shutterIndex = index
             mode = .shutterPriority
         }
     }

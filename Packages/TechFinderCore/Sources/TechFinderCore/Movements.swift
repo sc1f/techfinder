@@ -33,12 +33,24 @@ public enum ImageCircleModel {
         public var diameter: Double
         /// True when the aperture is wider than any quoted figure, so the diameter is a guess.
         public var isEstimate: Bool
+
+        public init(diameter: Double, isEstimate: Bool) {
+            self.diameter = diameter
+            self.isEstimate = isEstimate
+        }
     }
 
-    /// The aperture to plan movements at when the photographer hasn't set one: the smallest quoted
-    /// aperture, which is usually the working aperture the figure is quoted for (f/11 or f/22).
-    public static func referenceAperture(_ points: [ImageCirclePoint]) -> Double? {
-        points.filter { $0.diameter > 0 && $0.fNumber > 0 }.map(\.fNumber).max()
+    /// The quoted figure whose aperture is closest to `fNumber`, measured in stops. On a tie the wider
+    /// aperture's figure wins: the smaller circle, so coverage is never overstated.
+    public static func nearest(_ points: [ImageCirclePoint], to fNumber: Double) -> ImageCirclePoint? {
+        guard fNumber > 0 else { return nil }
+        return points
+            .filter { $0.diameter > 0 && $0.fNumber > 0 }
+            .min { a, b in
+                let da = abs(log2(a.fNumber / fNumber))
+                let db = abs(log2(b.fNumber / fNumber))
+                return abs(da - db) < 1e-9 ? a.fNumber < b.fNumber : da < db
+            }
     }
 
     public static func diameter(_ points: [ImageCirclePoint], at fNumber: Double) -> Estimate? {

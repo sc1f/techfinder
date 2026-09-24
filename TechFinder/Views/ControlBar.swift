@@ -82,7 +82,8 @@ private struct LensCarousel: View {
                 // Plain glass: the lifted lens is the drag feedback, so the pill itself shouldn't stretch.
                 .glassSurface(Capsule())
                 .contentShape(Capsule())
-                .gesture(slide(fits: fits))
+                // Takes priority over the lens buttons once the finger moves; a plain tap still selects.
+                .highPriorityGesture(slide(fits: fits))
                 .position(x: available / 2, y: height / 2)
                 .animation(.smooth(duration: 0.3), value: trackWidth)
         }

@@ -198,6 +198,28 @@ final class ExposureTests: XCTestCase {
         XCTAssertEqual(ExposureScale.label(.aperture, settings.apertureIndex), "f/18")
     }
 
+    func testFullStopsLandOnTheStandardSeries() {
+        func step(_ axis: ExposureAxis, _ label: String, _ steps: Int) -> String {
+            ExposureScale.label(axis, ExposureScale.stepped(index(axis, label), by: steps, thirdsPerStep: 3, axis: axis))
+        }
+        XCTAssertEqual(step(.iso, "250", 1), "400")
+        XCTAssertEqual(step(.iso, "250", -1), "200")
+        XCTAssertEqual(step(.iso, "400", 1), "800")
+        XCTAssertEqual(step(.iso, "800", 2), "3200")
+        XCTAssertEqual(step(.iso, "64", 1), "100")
+        XCTAssertEqual(step(.iso, "100", -1), "50")
+        XCTAssertEqual(step(.aperture, "9", 1), "f/11")
+        XCTAssertEqual(step(.aperture, "8", 1), "f/11")
+        XCTAssertEqual(step(.aperture, "5.6", -1), "f/4")
+        // Shutter indices run fast to slow: -1 is one stop faster.
+        XCTAssertEqual(step(.shutter, "1/100", -1), "1/125")
+        XCTAssertEqual(step(.shutter, "1/125", -1), "1/250")
+        XCTAssertEqual(step(.shutter, "1/125", 1), "1/60")
+        XCTAssertEqual(step(.shutter, "1\"", 1), "2\"")
+        // Thirds are plain steps.
+        XCTAssertEqual(ExposureScale.label(.iso, ExposureScale.stepped(index(.iso, "250"), by: 1, thirdsPerStep: 1, axis: .iso)), "320")
+    }
+
     func testExposurePersistsWithTheLibrary() throws {
         let url = FileManager.default.temporaryDirectory.appendingPathComponent("exposure-\(UUID().uuidString).json")
         defer { try? FileManager.default.removeItem(at: url) }
@@ -245,7 +267,18 @@ final class ImageCircleTests: XCTestCase {
         // An 80 mm lens: 80 mm circle wide open at f/4, 90 mm at f/11.
         let points = [ImageCirclePoint(diameter: 80, fNumber: 4), ImageCirclePoint(diameter: 90, fNumber: 11)]
         XCTAssertEqual(ImageCircleModel.diameter(points, at: 2.8), ImageCircleModel.Estimate(diameter: 80, isEstimate: false))
-        XCTAssertEqual(ImageCircleModel.referenceAperture(points), 11)
+    }
+
+    func testNearestFigureInStops() {
+        let points = [ImageCirclePoint(diameter: 80, fNumber: 4), ImageCirclePoint(diameter: 90, fNumber: 11)]
+        // f/8 is 0.46 stops from f/11 and 1.0 from f/4.
+        XCTAssertEqual(ImageCircleModel.nearest(points, to: 8)?.diameter, 90)
+        XCTAssertEqual(ImageCircleModel.nearest(points, to: 5.6)?.diameter, 80)
+        XCTAssertEqual(ImageCircleModel.nearest(points, to: 32)?.diameter, 90)
+        XCTAssertEqual(ImageCircleModel.nearest(points, to: 2.8)?.diameter, 80)
+        // Exactly between (f/6.63): the wider aperture's smaller circle.
+        XCTAssertEqual(ImageCircleModel.nearest(points, to: (4.0 * 11.0).squareRoot())?.diameter, 80)
+        XCTAssertNil(ImageCircleModel.nearest([], to: 8))
     }
 
     func testEightyMillimetreExampleAtF11() {

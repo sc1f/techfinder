@@ -6,7 +6,8 @@ import TechFinderCore
 /// Right (arrow or swipe) raises a value: higher ISO, a higher f-number, a faster shutter. Steps are full
 /// stops or thirds, as set in Settings. ISO is always set by hand, and so is one of aperture and
 /// shutter (lock icon); the meter gives the other (A). Tapping or moving the metered value makes it the
-/// one set by hand. Values outside the equipment limits turn orange.
+/// one set by hand. Tapping ISO lists the ISOs to choose from. Values outside the equipment limits turn
+/// orange.
 struct MeterBar: View {
     @Binding var settings: ExposureSettings
     let solution: ExposureSolution
@@ -45,8 +46,12 @@ struct MeterBar: View {
             isWarning: solution.isOutsideLimits(axis, limits) || (isMetered && readingIsClipped),
             canLower: direction > 0 ? index > range.lowerBound : index < range.upperBound,
             canRaise: direction > 0 ? index < range.upperBound : index > range.lowerBound,
-            change: { steps in settings.step(axis, by: steps * step * direction, from: solution) },
-            lock: axis == .iso ? nil : { settings.lock(axis, from: solution) }
+            change: { steps in settings.step(axis, by: steps * direction, thirdsPerStep: step, from: solution) },
+            lock: axis == .iso ? nil : { settings.lock(axis, from: solution) },
+            // Tapping ISO lists the ISOs within the equipment limits, to jump straight to one.
+            choices: axis == .iso ? limits.iso.map { ($0, ExposureScale.label(.iso, $0)) } : nil,
+            selectedChoice: index,
+            select: { settings.set(axis, to: $0) }
         )
         .accessibilityIdentifier("meter-\(axis.rawValue)")
     }
@@ -65,10 +70,15 @@ private struct MeterDial: View {
     /// Raises (positive) or lowers (negative) the value by a number of steps.
     let change: (Int) -> Void
     let lock: (() -> Void)?
+    /// Values to pick from when the value is tapped, instead of locking.
+    var choices: [(index: Int, label: String)]? = nil
+    var selectedChoice: Int = 0
+    var select: (Int) -> Void = { _ in }
 
     /// Steps already applied during the current swipe.
     @State private var swipeSteps = 0
     @State private var ticks = 0
+    @State private var showsChoices = false
     @GestureState private var isTouching = false
 
     private let stepDistance: CGFloat = 26
@@ -77,6 +87,51 @@ private struct MeterDial: View {
         HStack(spacing: 0) {
             arrow("chevron.left", enabled: canLower) { apply(-1) }
 
+            valueArea
+
+            arrow("chevron.right", enabled: canRaise) { apply(1) }
+        }
+        .frame(height: MeterBar.height)
+        // Plain glass: interactive glass stretches with the finger, which a swipe control shouldn't.
+        // A faint highlight shows the touch instead, without changing the pill's size.
+        .glassSurface(Capsule())
+        .overlay(Capsule().fill(.white.opacity(isTouching ? 0.08 : 0)).allowsHitTesting(false))
+        .simultaneousGesture(DragGesture(minimumDistance: 0).updating($isTouching) { _, touching, _ in touching = true })
+        .animation(.easeOut(duration: 0.12), value: isTouching)
+        .sensoryFeedback(.selection, trigger: ticks)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(caption)
+        .accessibilityValue(value)
+        .accessibilityAdjustableAction { direction in
+            apply(direction == .increment ? 1 : -1)
+        }
+    }
+
+    /// The caption and value. Tapping locks it, or opens the list of choices; swiping steps it.
+    private var valueArea: some View {
+        valueLabel
+            .onTapGesture {
+                if choices != nil {
+                    showsChoices = true
+                } else if let lock {
+                    lock()
+                    ticks += 1
+                }
+            }
+            .gesture(swipe)
+            .popover(isPresented: $showsChoices) {
+                if let choices {
+                    ChoiceList(title: caption, choices: choices, selected: selectedChoice) { index in
+                        select(index)
+                        ticks += 1
+                        showsChoices = false
+                    }
+                    .presentationCompactAdaptation(.popover)
+                }
+            }
+    }
+
+    private var valueLabel: some View {
             VStack(spacing: 0) {
                 HStack(spacing: 3) {
                     Text(caption)
@@ -103,29 +158,6 @@ private struct MeterDial: View {
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .contentShape(Rectangle())
-            .onTapGesture {
-                guard let lock else { return }
-                lock()
-                ticks += 1
-            }
-            .gesture(swipe)
-
-            arrow("chevron.right", enabled: canRaise) { apply(1) }
-        }
-        .frame(height: MeterBar.height)
-        // Plain glass: interactive glass stretches with the finger, which a swipe control shouldn't.
-        // A faint highlight shows the touch instead, without changing the pill's size.
-        .glassSurface(Capsule())
-        .overlay(Capsule().fill(.white.opacity(isTouching ? 0.08 : 0)).allowsHitTesting(false))
-        .simultaneousGesture(DragGesture(minimumDistance: 0).updating($isTouching) { _, touching, _ in touching = true })
-        .animation(.easeOut(duration: 0.12), value: isTouching)
-        .sensoryFeedback(.selection, trigger: ticks)
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel(caption)
-        .accessibilityValue(value)
-        .accessibilityAdjustableAction { direction in
-            apply(direction == .increment ? 1 : -1)
-        }
     }
 
     private func arrow(_ systemImage: String, enabled: Bool, action: @escaping () -> Void) -> some View {
@@ -157,5 +189,41 @@ private struct MeterDial: View {
         guard steps != 0 else { return }
         change(steps)
         ticks += 1
+    }
+}
+
+/// A short list to pick a value from, scrolled to the current one.
+private struct ChoiceList: View {
+    let title: String
+    let choices: [(index: Int, label: String)]
+    let selected: Int
+    let pick: (Int) -> Void
+
+    var body: some View {
+        ScrollViewReader { proxy in
+            List(choices, id: \.index) { choice in
+                Button {
+                    pick(choice.index)
+                } label: {
+                    HStack {
+                        Text(choice.label)
+                            .monospacedDigit()
+                        Spacer()
+                        if choice.index == selected {
+                            Image(systemName: "checkmark")
+                                .foregroundStyle(.tint)
+                        }
+                    }
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .id(choice.index)
+                .accessibilityAddTraits(choice.index == selected ? .isSelected : [])
+            }
+            .listStyle(.plain)
+            .onAppear { proxy.scrollTo(selected, anchor: .center) }
+        }
+        .frame(width: 160, height: 300)
+        .accessibilityIdentifier("choices")
     }
 }

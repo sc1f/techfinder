@@ -38,8 +38,6 @@ final class CameraController: @unchecked Sendable {
     private let meterOutput = AVCaptureVideoDataOutput()
     private let spotMeter = SpotMeter()
     private let meterQueue = DispatchQueue(label: "TechFinder.meter", qos: .userInitiated)
-    /// Last exposure bias applied, to skip redundant updates (session queue).
-    @ObservationIgnored private var appliedBias: Float = 0
 
     deinit {
         if let runtimeErrorObserver {
@@ -101,29 +99,20 @@ final class CameraController: @unchecked Sendable {
         }
     }
 
-    /// Keeps focusing and metering at a point, in device coordinates ((0,0) top-left of the landscape
-    /// sensor image), until another point is chosen, the lens changes or `resetFocusAndExposure()`.
-    func focusAndMeter(at devicePoint: CGPoint) {
+    /// Keeps focusing at a point, in device coordinates ((0,0) top-left of the landscape sensor image),
+    /// until another point is chosen, the lens changes or `resetFocus()`.
+    func focus(at devicePoint: CGPoint) {
         queue.async { [self] in
             guard let device else { return }
-            setFocusAndExposure(on: device, at: devicePoint)
+            setFocus(on: device, at: devicePoint)
         }
     }
 
-    /// Brightens or darkens the preview relative to the camera's automatic exposure, in stops. Used to
-    /// show how the chosen exposure will look.
-    func setExposureBias(_ stops: Float) {
-        queue.async { [self] in
-            guard let device, abs(stops - appliedBias) > 0.05 else { return }
-            applyExposureBias(stops, on: device)
-        }
-    }
-
-    /// Returns to automatic focus and exposure for the centre of the image.
-    func resetFocusAndExposure() {
+    /// Returns to continuous autofocus at the centre of the image.
+    func resetFocus() {
         queue.async { [self] in
             guard let device else { return }
-            setFocusAndExposure(on: device, at: CGPoint(x: 0.5, y: 0.5))
+            setFocus(on: device, at: CGPoint(x: 0.5, y: 0.5))
         }
     }
 
@@ -148,40 +137,36 @@ final class CameraController: @unchecked Sendable {
         }
         if isNewFraming {
             // A chosen focus point belongs to the previous framing.
-            setFocusAndExposure(on: device, at: CGPoint(x: 0.5, y: 0.5))
+            setFocus(on: device, at: CGPoint(x: 0.5, y: 0.5))
         }
     }
 
-    private func applyExposureBias(_ stops: Float, on device: AVCaptureDevice) {
-        let bias = min(max(stops, device.minExposureTargetBias), device.maxExposureTargetBias)
+    /// Continuous autofocus weighted to `point`, so the phone keeps focusing there as it moves.
+    private func setFocus(on device: AVCaptureDevice, at point: CGPoint) {
         do {
             try device.lockForConfiguration()
-            device.setExposureTargetBias(bias, completionHandler: nil)
-            device.unlockForConfiguration()
-            appliedBias = stops
-        } catch {
-            // Exposure compensation is a convenience; framing does not depend on it.
-        }
-    }
-
-    /// Continuous focus and exposure weighted to `point`, so the phone keeps adjusting there as it moves.
-    /// The exposure bias is left alone: it shows the chosen exposure and is owned by the light meter.
-    private func setFocusAndExposure(on device: AVCaptureDevice, at point: CGPoint) {
-        let focusMode: AVCaptureDevice.FocusMode = .continuousAutoFocus
-        let exposureMode: AVCaptureDevice.ExposureMode = .continuousAutoExposure
-        do {
-            try device.lockForConfiguration()
-            if device.isFocusPointOfInterestSupported, device.isFocusModeSupported(focusMode) {
+            if device.isFocusPointOfInterestSupported, device.isFocusModeSupported(.continuousAutoFocus) {
                 device.focusPointOfInterest = point
-                device.focusMode = focusMode
-            }
-            if device.isExposurePointOfInterestSupported, device.isExposureModeSupported(exposureMode) {
-                device.exposurePointOfInterest = point
-                device.exposureMode = exposureMode
+                device.focusMode = .continuousAutoFocus
             }
             device.unlockForConfiguration()
         } catch {
-            // Focus and metering are conveniences; framing does not depend on them.
+            // Focus is a convenience; framing does not depend on it.
+        }
+    }
+
+    /// Continuous auto exposure weighted to the spot being metered, so the spot is well exposed (not
+    /// clipped) in the frames the spot meter reads. The preview's brightness is otherwise irrelevant.
+    private func setExposurePoint(on device: AVCaptureDevice, at point: CGPoint) {
+        do {
+            try device.lockForConfiguration()
+            if device.isExposurePointOfInterestSupported, device.isExposureModeSupported(.continuousAutoExposure) {
+                device.exposurePointOfInterest = point
+                device.exposureMode = .continuousAutoExposure
+            }
+            device.unlockForConfiguration()
+        } catch {
+            // Best effort.
         }
     }
 
@@ -232,9 +217,13 @@ final class CameraController: @unchecked Sendable {
 
     // MARK: - Spot meter
 
-    /// Moves or resizes the metered spot (sensor landscape coordinates).
+    /// Moves or resizes the metered spot (sensor landscape coordinates), and centres auto exposure on it.
     func setSpot(_ region: SpotMeter.Region) {
         spotMeter.region = region
+        queue.async { [self] in
+            guard let device else { return }
+            setExposurePoint(on: device, at: region.center)
+        }
     }
 
     /// Feeds video frames to the spot meter (session queue).

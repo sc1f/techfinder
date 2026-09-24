@@ -113,6 +113,27 @@ final class TechFinderUITests: XCTestCase {
         XCTAssertTrue(value.hasPrefix("+"), "Dragging down should rise, got \(value)")
     }
 
+    func testIsoListAndFullStops() {
+        let app = XCUIApplication.fresh()
+        app.launch()
+
+        let iso = app.otherElements["meter-iso"].firstMatch
+        XCTAssertTrue(iso.waitForExistence(timeout: 15))
+        XCTAssertEqual(iso.value as? String, "100")
+
+        // Tapping the value lists the ISOs; pick 250.
+        iso.tap()
+        let choice = app.buttons["250"].firstMatch
+        XCTAssertTrue(choice.waitForExistence(timeout: 5), "Tapping ISO lists the ISOs")
+        attachScreenshot(of: app, named: "iso-list")
+        choice.tap()
+        XCTAssertEqual(iso.value as? String, "250")
+
+        // A full-stop step from 250 lands on the standard series: 400.
+        iso.coordinate(withNormalizedOffset: CGVector(dx: 0.93, dy: 0.5)).tap()
+        XCTAssertEqual(iso.value as? String, "400")
+    }
+
     func testLensSelectorTapAndDrag() {
         let app = XCUIApplication.fresh()
         app.launch()

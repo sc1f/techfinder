@@ -199,7 +199,7 @@ struct MovementBar: View {
         guard let margin, let imageCircle else { return "No image circle" }
         let circle = "IC \(Millimetres.label(imageCircle.diameter))\(imageCircle.isEstimate ? "*" : "") f/\(Millimetres.label(imageCircle.aperture))"
         if margin < 0 { return "\(circle) · outside" }
-        return "\(circle) · \(Millimetres.label(margin)) to edge"
+        return "\(Millimetres.label(margin)) mm to edge · \(circle)"
     }
 
     private var captionColor: Color {
@@ -243,7 +243,7 @@ private struct MovementDial: View {
                     .font(.system(size: 9, weight: .medium))
                     .foregroundStyle(captionColor)
                     .lineLimit(1)
-                    .minimumScaleFactor(0.8)
+                    .minimumScaleFactor(0.7)
                 Text(label)
                     .font(.footnote.weight(.semibold).monospacedDigit())
                     .foregroundStyle(.white)

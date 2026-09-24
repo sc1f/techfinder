@@ -15,10 +15,7 @@ struct ViewfinderView: View {
     @State private var panel: Sheet?
     @State private var focusMarker: FocusMarker?
     /// A tapped metering spot; nil meters the centre cross (or the moved frame's centre).
-    @State private var tappedSpot: TappedSpot?
     /// Exposure compensation in stops for the current focus point, set by dragging after a tap.
-    @State private var exposureBias: Float = 0
-    @State private var exposureDragStart: Float?
     /// Bumped by every touch on the image; the focus square hides after 3 s without one.
     @State private var focusActivity = 0
     @AppStorage("frameFill") private var fill = Framing.defaultFill
@@ -39,13 +36,6 @@ struct ViewfinderView: View {
         let location: CGPoint
     }
 
-    private struct TappedSpot: Equatable {
-        /// In the sensor's landscape image, 0...1.
-        var devicePoint: CGPoint
-        /// On the viewfinder image.
-        var location: CGPoint
-    }
-
     /// The spot meter's angle of view.
     static let spotAngle = 3.0
 
@@ -63,7 +53,7 @@ struct ViewfinderView: View {
         var layout: MovementLayout
         var geometry: MovementGeometry
         var imageCircle: ImageCircleModel.Estimate?
-        /// The aperture the image circle is taken at.
+        /// The quoted aperture of the image circle figure in use.
         var aperture: Double
         var focalLength: Double
         /// Room between the furthest corner and the image circle edge, in mm.
@@ -73,24 +63,19 @@ struct ViewfinderView: View {
 
     var body: some View {
         let solution = self.solution
-        let exposure = ExposureSolver.solve(library.exposure, meteredEV100: meteredEV,
-                                            compensation: Double(exposureBias))
+        let exposure = ExposureSolver.solve(library.exposure, meteredEV100: meteredEV)
         let movement = movementInfo(exposure: exposure)
         let zoom = movement?.layout.zoom ?? solution?.zoom ?? 1
-        feedback(presentations(simulation(lifecycle(screen(solution: solution, exposure: exposure, movement: movement),
-                                                    zoom: zoom),
-                                          exposure: exposure)))
+        feedback(presentations(lifecycle(screen(solution: solution, exposure: exposure, movement: movement),
+                                         zoom: zoom)))
     }
 
     private func movementInfo(exposure: ExposureSolution) -> MovementInfo? {
         guard movements.isOn, let lens = library.selectedLens else { return nil }
-        // Plan at the aperture set by hand; if the meter is choosing it, at the lens's reference aperture
-        // instead, so the circle doesn't change as the light does.
-        let setAperture = library.exposure.mode == .aperturePriority
-            ? ExposureScale.aperture(library.exposure.apertureIndex) : nil
-        let aperture = setAperture ?? ImageCircleModel.referenceAperture(lens.imageCircle)
-            ?? ExposureScale.aperture(exposure.apertureIndex)
-        let imageCircle = lens.imageCircle(at: aperture)
+        // Use the lens's quoted figure at the aperture closest to the meter's.
+        let figure = ImageCircleModel.nearest(lens.imageCircle, to: ExposureScale.aperture(exposure.apertureIndex))
+        let imageCircle = figure.map { ImageCircleModel.Estimate(diameter: $0.diameter, isEstimate: false) }
+        let aperture = figure?.fNumber ?? ExposureScale.aperture(exposure.apertureIndex)
         let geometry = MovementGeometry(format: library.selectedFormat, riseAlongLongSide: !orientation.isLandscape)
         let layout = MovementPlanner.layout(format: library.selectedFormat, focalLength: lens.focalLength,
                                             movement: movements.movement, imageCircle: imageCircle?.diameter,
@@ -170,7 +155,7 @@ struct ViewfinderView: View {
                         camera.setSpot(region)
                     }
                 if let focusMarker {
-                    FocusSquare(exposureBias: exposureBias, isAdjusting: exposureDragStart != nil)
+                    FocusSquare()
                         .position(focusMarker.location)
                         .id(focusMarker.id)
                         .transition(.opacity)
@@ -267,14 +252,12 @@ struct ViewfinderView: View {
                 camera.setZoom(zoom)
                 // The camera returns to automatic focus and exposure, metered at the centre, for a new framing.
                 focusMarker = nil
-                tappedSpot = nil
-                exposureBias = 0
             }
             .task(id: focusActivity) {
                 // Hide the focus square after 3 s without a touch; the point stays active.
                 guard focusMarker != nil else { return }
                 try? await Task.sleep(for: .seconds(3))
-                guard !Task.isCancelled, exposureDragStart == nil else { return }
+                guard !Task.isCancelled else { return }
                 withAnimation(.easeOut(duration: 0.4)) { focusMarker = nil }
             }
             .task {
@@ -319,15 +302,6 @@ struct ViewfinderView: View {
                 present(destination)
             }
             #endif
-    }
-
-    /// The preview follows the exposure compensation dragged after a tap, so it looks as bright as the
-    /// meter's recommendation.
-    private func simulation(_ content: some View, exposure: ExposureSolution) -> some View {
-        content
-            .onChange(of: exposureBias, initial: true) { _, bias in
-                camera.setExposureBias(bias)
-            }
     }
 
     private func feedback(_ content: some View) -> some View {
@@ -446,9 +420,6 @@ struct ViewfinderView: View {
         let radius = CGSize(width: radiusTan / (2 * halfLong), height: radiusTan / (2 * halfWidth))
         let screenRadius = CGFloat(radiusTan * pointsPerTan)
 
-        if let tappedSpot, movement == nil {
-            return (tappedSpot.location, screenRadius, SpotMeter.Region(center: tappedSpot.devicePoint, radius: radius))
-        }
         var tanX = 0.0
         var tanY = 0.0
         var location = CGPoint(x: imageSize.width / 2, y: imageSize.height / 2)
@@ -463,36 +434,29 @@ struct ViewfinderView: View {
         return (location, screenRadius, SpotMeter.Region(center: CGPoint(x: v, y: 1 - u), radius: radius))
     }
 
-    /// Moves the focus and metering point to a tap on the upright preview. Tapping the current point
-    /// returns to automatic focus and exposure.
+    /// Focuses at a tap on the upright preview. Tapping the focus square again returns to autofocus at
+    /// the centre. Metering stays on the spot at the centre cross.
     private func focus(at location: CGPoint, in size: CGSize, transform: (scale: CGFloat, offset: CGSize)) {
         guard size.width > 0, size.height > 0 else { return }
-        if let tappedSpot, hypot(tappedSpot.location.x - location.x, tappedSpot.location.y - location.y) < 40 {
-            camera.resetFocusAndExposure()
-            exposureBias = 0
-            withAnimation(.smooth(duration: 0.2)) {
-                self.focusMarker = nil
-                self.tappedSpot = nil
-            }
+        if let focusMarker, hypot(focusMarker.location.x - location.x, focusMarker.location.y - location.y) < 40 {
+            camera.resetFocus()
+            withAnimation(.smooth(duration: 0.2)) { self.focusMarker = nil }
             return
         }
-        exposureBias = 0
         focusActivity += 1
         // Undo the movement view's magnification to find the point on the camera image.
         let image = CGPoint(x: size.width / 2 + (location.x - size.width / 2 - transform.offset.width) / transform.scale,
                             y: size.height / 2 + (location.y - size.height / 2 - transform.offset.height) / transform.scale)
         // The preview is the landscape sensor image turned 90° clockwise.
         let devicePoint = CGPoint(x: min(max(image.y / size.height, 0), 1), y: min(max(1 - image.x / size.width, 0), 1))
-        camera.focusAndMeter(at: devicePoint)
+        camera.focus(at: devicePoint)
         withAnimation(.smooth(duration: 0.2)) {
             focusMarker = FocusMarker(location: location)
-            tappedSpot = TappedSpot(devicePoint: devicePoint, location: location)
         }
     }
 
-    /// Dragging on the image. With movements on, it moves the chosen axis only: in the overview the frame
-    /// follows the finger; in the result view the scene does, like panning a photo. Otherwise, after a
-    /// tap, dragging up brightens and down darkens, about one stop per 100 points, within ±2 stops.
+    /// Dragging on the image with movements on moves the chosen axis only: in the overview the frame
+    /// follows the finger; in the result view the scene does, like panning a photo.
     private func imageDrag(movement: MovementInfo?, mapping: MovementMapping?) -> some Gesture {
         DragGesture(minimumDistance: 8)
             .onChanged { value in
@@ -504,20 +468,10 @@ struct ViewfinderView: View {
                     let along = Double(value.translation.width) * direction.x + Double(value.translation.height) * direction.y
                     let millimetres = (movements.showsOverview ? 1 : -1) * along / mapping.pointsPerTan * movement.focalLength
                     move(movements.axis, to: start[movements.axis] + millimetres, info: movement)
-                } else {
-                    guard focusMarker != nil else { return }
-                    let start = exposureDragStart ?? exposureBias
-                    exposureDragStart = start
-                    exposureBias = min(max(start - Float(value.translation.height / 100), -2), 2)
                 }
             }
             .onEnded { _ in
-                if movementDragStart != nil {
-                    movementDragStart = nil
-                } else {
-                    exposureDragStart = nil
-                    focusActivity += 1
-                }
+                movementDragStart = nil
             }
     }
 
@@ -554,30 +508,15 @@ struct ViewfinderView: View {
     }
 }
 
-/// Camera-app style focus square: settles into place where the user tapped. A sun beside it shows
-/// exposure compensation, moving up as the image brightens. The viewfinder hides it after 3 s idle.
+/// Camera-app style focus square: settles into place where the user tapped. The viewfinder hides it
+/// after 3 s idle.
 private struct FocusSquare: View {
-    let exposureBias: Float
-    let isAdjusting: Bool
-
     @State private var settled = false
 
     var body: some View {
         Rectangle()
             .stroke(Color.accentColor, lineWidth: 1.5)
             .frame(width: 72, height: 72)
-            .overlay(alignment: .trailing) {
-                VStack(spacing: 2) {
-                    Image(systemName: "sun.max.fill")
-                        .font(.system(size: 13, weight: .semibold))
-                    if isAdjusting || exposureBias != 0 {
-                        Text(String(format: "%+.1f", exposureBias))
-                            .font(.system(size: 10, weight: .semibold).monospacedDigit())
-                    }
-                }
-                .foregroundStyle(Color.accentColor)
-                .offset(x: 26, y: CGFloat(-exposureBias) * 18)
-            }
             .scaleEffect(settled ? 1 : 1.35)
             .allowsHitTesting(false)
             .onAppear {

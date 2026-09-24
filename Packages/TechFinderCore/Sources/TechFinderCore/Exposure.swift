@@ -66,16 +66,14 @@ public enum ExposureScale {
     }
 }
 
-/// The photographer's exposure: ISO is always set by hand; aperture and shutter are either set by hand or
-/// one of them follows the light meter.
+/// The photographer's exposure: ISO is always set by hand, and so is either the aperture or the shutter;
+/// the meter gives the other.
 public struct ExposureSettings: Codable, Equatable, Sendable {
     public enum Mode: String, Codable, Sendable {
         /// Aperture is set; shutter follows the meter.
         case aperturePriority
         /// Shutter is set; aperture follows the meter.
         case shutterPriority
-        /// Both are set; the viewfinder shows the resulting over- or underexposure.
-        case manual
     }
 
     public var isoIndex: Int
@@ -90,29 +88,35 @@ public struct ExposureSettings: Codable, Equatable, Sendable {
         self.mode = mode
     }
 
+    private enum CodingKeys: String, CodingKey {
+        case isoIndex, apertureIndex, shutterIndex, mode
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        isoIndex = try container.decode(Int.self, forKey: .isoIndex)
+        apertureIndex = try container.decode(Int.self, forKey: .apertureIndex)
+        shutterIndex = try container.decode(Int.self, forKey: .shutterIndex)
+        // Earlier versions had a manual mode; it becomes aperture priority.
+        let raw = try container.decodeIfPresent(String.self, forKey: .mode)
+        mode = raw.flatMap(Mode.init(rawValue:)) ?? .aperturePriority
+    }
+
     /// ISO 100, f/8, 1/125, aperture priority.
     public static let `default` = ExposureSettings(isoIndex: 12, apertureIndex: 18, shutterIndex: 18, mode: .aperturePriority)
 
-    /// The axis the meter sets, if any.
-    public var meteredAxis: ExposureAxis? {
-        switch mode {
-        case .aperturePriority: .shutter
-        case .shutterPriority: .aperture
-        case .manual: nil
-        }
+    /// The axis the meter sets.
+    public var meteredAxis: ExposureAxis {
+        mode == .aperturePriority ? .shutter : .aperture
     }
 
-    /// The axis held by a tap, if any.
-    public var lockedAxis: ExposureAxis? {
-        switch mode {
-        case .aperturePriority: .aperture
-        case .shutterPriority: .shutter
-        case .manual: nil
-        }
+    /// The axis set by hand besides ISO.
+    public var lockedAxis: ExposureAxis {
+        mode == .aperturePriority ? .aperture : .shutter
     }
 
     /// Moves one axis by `delta` thirds, starting from what is shown in `solution`. Moving the metered
-    /// value takes it off the meter, so both aperture and shutter are then set by hand.
+    /// value makes it the one set by hand, and the meter then gives the other.
     public mutating func step(_ axis: ExposureAxis, by delta: Int, from solution: ExposureSolution) {
         let range = ExposureScale.range(axis)
         switch axis {
@@ -120,16 +124,10 @@ public struct ExposureSettings: Codable, Equatable, Sendable {
             isoIndex = min(max(isoIndex + delta, range.lowerBound), range.upperBound)
         case .aperture:
             apertureIndex = min(max(solution.apertureIndex + delta, range.lowerBound), range.upperBound)
-            if mode == .shutterPriority {
-                shutterIndex = solution.shutterIndex
-                mode = .manual
-            }
+            mode = .aperturePriority
         case .shutter:
             shutterIndex = min(max(solution.shutterIndex + delta, range.lowerBound), range.upperBound)
-            if mode == .aperturePriority {
-                apertureIndex = solution.apertureIndex
-                mode = .manual
-            }
+            mode = .shutterPriority
         }
     }
 
@@ -184,13 +182,10 @@ public struct ExposureSolution: Equatable, Sendable {
     public var isoIndex: Int
     public var apertureIndex: Int
     public var shutterIndex: Int
-    /// The value set by the meter, or nil when both are set by hand or there is no reading yet.
+    /// The value set by the meter, or nil when there is no reading yet.
     public var meteredAxis: ExposureAxis?
     /// The metered value fell off the end of its scale.
     public var meteredValueIsOffScale: Bool
-    /// How much brighter than the meter's correct exposure these settings are, in stops. Positive is
-    /// overexposed. Zero without a reading.
-    public var exposureError: Double
 
     public func index(_ axis: ExposureAxis) -> Int {
         switch axis {
@@ -220,7 +215,7 @@ public enum ExposureSolver {
               iso: ExposureScale.iso(isoIndex))
     }
 
-    /// Fills in the metered value and works out how far the result is from correct exposure.
+    /// Fills in the metered value: the shutter speed or aperture that exposes correctly for the light.
     ///
     /// - Parameters:
     ///   - meteredEV100: The scene's exposure value at ISO 100 from the light meter, or nil if unknown.
@@ -228,7 +223,7 @@ public enum ExposureSolver {
     public static func solve(_ settings: ExposureSettings, meteredEV100: Double?, compensation: Double = 0) -> ExposureSolution {
         var solution = ExposureSolution(isoIndex: settings.isoIndex, apertureIndex: settings.apertureIndex,
                                         shutterIndex: settings.shutterIndex, meteredAxis: nil,
-                                        meteredValueIsOffScale: false, exposureError: 0)
+                                        meteredValueIsOffScale: false)
         guard let metered = meteredEV100, metered.isFinite else { return solution }
 
         let target = metered - compensation
@@ -250,14 +245,7 @@ public enum ExposureSolver {
             solution.apertureIndex = index
             solution.meteredAxis = .aperture
             solution.meteredValueIsOffScale = offScale
-        case .manual:
-            break
         }
-
-        let chosen = ev100(isoIndex: solution.isoIndex, apertureIndex: solution.apertureIndex,
-                           shutterIndex: solution.shutterIndex)
-        // A lower exposure value than the scene needs lets in more light: overexposure.
-        solution.exposureError = metered - chosen
         return solution
     }
 

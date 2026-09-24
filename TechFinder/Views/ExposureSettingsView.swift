@@ -11,6 +11,17 @@ struct ExposureSettingsView: View {
     var body: some View {
         NavigationStack {
             Form {
+                Section {
+                    Picker("Steps", selection: Binding(get: { library.meterStep }, set: { library.meterStep = $0 })) {
+                        Text("Full Stop").tag(3)
+                        Text("⅓ Stop").tag(1)
+                    }
+                } header: {
+                    Text("Light Meter")
+                } footer: {
+                    Text("How far each arrow tap or swipe moves ISO, aperture and shutter. Metered values are always shown to the nearest ⅓ stop.")
+                }
+
                 limitSection(.iso, title: "ISO", lower: "Lowest", upper: "Highest",
                              footer: "The ISO range of your back or film.")
                 limitSection(.aperture, title: "Aperture", lower: "Widest", upper: "Smallest",

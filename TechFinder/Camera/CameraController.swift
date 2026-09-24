@@ -22,9 +22,10 @@ final class CameraController: @unchecked Sendable {
 
     private(set) var status: Status = .idle
     private(set) var optics: CameraOptics = .simulated
-    /// The scene's exposure value at ISO 100, read from the camera's own metering and smoothed.
-    /// Nil until the first reading.
+    /// The spot meter's exposure value at ISO 100, smoothed. Nil until the first reading.
     private(set) var meteredEV: Double?
+    /// Most of the metered spot is clipped white, so the reading is too dark.
+    private(set) var meterIsClipped = false
 
     let session = AVCaptureSession()
     private let queue = DispatchQueue(label: "TechFinder.camera")
@@ -34,7 +35,9 @@ final class CameraController: @unchecked Sendable {
     @ObservationIgnored private var requestedZoom: Double = 1
     @ObservationIgnored private var appliedZoom: Double?
     @ObservationIgnored private var runtimeErrorObserver: NSObjectProtocol?
-    @ObservationIgnored private var meterTimer: DispatchSourceTimer?
+    private let meterOutput = AVCaptureVideoDataOutput()
+    private let spotMeter = SpotMeter()
+    private let meterQueue = DispatchQueue(label: "TechFinder.meter", qos: .userInitiated)
     /// Last exposure bias applied, to skip redundant updates (session queue).
     @ObservationIgnored private var appliedBias: Float = 0
 
@@ -211,7 +214,7 @@ final class CameraController: @unchecked Sendable {
 
         self.device = device
         isConfigured = true
-        startMetering()
+        addSpotMeter(for: device)
 
         applyRequestedZoom()
 
@@ -227,36 +230,39 @@ final class CameraController: @unchecked Sendable {
         DispatchQueue.main.async { self.optics = optics }
     }
 
-    // MARK: - Light meter (session queue)
+    // MARK: - Spot meter
 
-    /// Samples the camera's exposure about seven times a second.
-    private func startMetering() {
-        let timer = DispatchSource.makeTimerSource(queue: queue)
-        timer.schedule(deadline: .now() + 0.3, repeating: .milliseconds(150))
-        timer.setEventHandler { [weak self] in self?.sampleMeter() }
-        timer.resume()
-        meterTimer = timer
+    /// Moves or resizes the metered spot (sensor landscape coordinates).
+    func setSpot(_ region: SpotMeter.Region) {
+        spotMeter.region = region
     }
 
-    /// The scene's EV at ISO 100 from what the camera is doing now: its exposure settings, how far those
-    /// are from the camera's own target, and the bias applied for the exposure simulation.
-    private func sampleMeter() {
-        guard let device, session.isRunning else { return }
-        let seconds = CMTimeGetSeconds(device.exposureDuration)
-        let iso = Double(device.iso)
-        let fNumber = Double((device.activePrimaryConstituent ?? device).lensAperture)
-        let offset = Double(device.exposureTargetOffset)
-        let bias = Double(device.exposureTargetBias)
-        guard seconds > 0, iso > 0, fNumber > 0, offset.isFinite else { return }
+    /// Feeds video frames to the spot meter (session queue).
+    private func addSpotMeter(for device: AVCaptureDevice) {
+        // Video HDR tone-maps highlights and shadows differently frame to frame, which would skew readings.
+        if device.activeFormat.isVideoHDRSupported, (try? device.lockForConfiguration()) != nil {
+            device.automaticallyAdjustsVideoHDREnabled = false
+            device.isVideoHDREnabled = false
+            device.unlockForConfiguration()
+        }
 
-        let ev = ExposureSolver.ev100(fNumber: fNumber, seconds: seconds, iso: iso) + offset + bias
-        guard ev.isFinite else { return }
-        DispatchQueue.main.async {
-            // Smooth out frame-to-frame jitter; publish only changes worth redrawing for.
-            let smoothed = self.meteredEV.map { $0 + (ev - $0) * 0.35 } ?? ev
+        spotMeter.device = device
+        spotMeter.onReading = { [weak self] reading in
+            guard let self else { return }
+            // Smooth frame-to-frame jitter; publish only changes worth redrawing for.
+            let smoothed = self.meteredEV.map { $0 + (reading.ev100 - $0) * 0.4 } ?? reading.ev100
             if self.meteredEV.map({ abs($0 - smoothed) > 0.02 }) ?? true {
                 self.meteredEV = smoothed
             }
+            if self.meterIsClipped != reading.isClipped {
+                self.meterIsClipped = reading.isClipped
+            }
+        }
+        meterOutput.videoSettings = [kCVPixelBufferPixelFormatTypeKey as String: kCVPixelFormatType_420YpCbCr8BiPlanarFullRange]
+        meterOutput.alwaysDiscardsLateVideoFrames = true
+        meterOutput.setSampleBufferDelegate(spotMeter, queue: meterQueue)
+        if session.canAddOutput(meterOutput) {
+            session.addOutput(meterOutput)
         }
     }
 

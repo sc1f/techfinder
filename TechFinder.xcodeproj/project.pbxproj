@@ -12,6 +12,7 @@
 		2759AE6B710324CF720A06A9 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = BCC2D6C5BE9D6BD8C43D59B9 /* Assets.xcassets */; };
 		304CE16860A21318333CD95B /* ExposureSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 139CB32D530EC706D670DE1A /* ExposureSettingsView.swift */; };
 		342B98B3F84D5FBD6A50BC15 /* TechFinderApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = F3F660CB7BFF36E60939F0C2 /* TechFinderApp.swift */; };
+		3560A88ABB5C70959F0CFCDA /* SpotMeter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1F10372A0984EC5D2A4EB867 /* SpotMeter.swift */; };
 		365226B08C393ABE6A2F38F4 /* Glass.swift in Sources */ = {isa = PBXBuildFile; fileRef = D9EFA09D3DA46F09C9F7A554 /* Glass.swift */; };
 		3A79900073753C118C549C2B /* DeviceOrientation.swift in Sources */ = {isa = PBXBuildFile; fileRef = 09CCFCD19DD3612784D4ADFB /* DeviceOrientation.swift */; };
 		473396F7A738F65E02D47B64 /* LensLibraryView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA82ECA49E5B783C1C8E31AC /* LensLibraryView.swift */; };
@@ -42,6 +43,7 @@
 		02E1E7C2C26E92316167533B /* FrameOverlay.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FrameOverlay.swift; sourceTree = "<group>"; };
 		09CCFCD19DD3612784D4ADFB /* DeviceOrientation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeviceOrientation.swift; sourceTree = "<group>"; };
 		139CB32D530EC706D670DE1A /* ExposureSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExposureSettingsView.swift; sourceTree = "<group>"; };
+		1F10372A0984EC5D2A4EB867 /* SpotMeter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SpotMeter.swift; sourceTree = "<group>"; };
 		1FD8A5E79308384BE219F6D9 /* ControlBar.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ControlBar.swift; sourceTree = "<group>"; };
 		21304C25CCE38C75D150A8BA /* Panel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Panel.swift; sourceTree = "<group>"; };
 		2DCC5BB0DBDCEA3ADCF36DA4 /* TechFinder.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = TechFinder.app; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -80,6 +82,7 @@
 			children = (
 				C847B53F09284C239161CDE6 /* CameraController.swift */,
 				3CC170A9DDCC0F91DDFB4774 /* CameraPreview.swift */,
+				1F10372A0984EC5D2A4EB867 /* SpotMeter.swift */,
 			);
 			path = Camera;
 			sourceTree = "<group>";
@@ -289,6 +292,7 @@
 				65F03837C9302609DCCB73D3 /* MovementViews.swift in Sources */,
 				7910D696A199ADEB1C98F76B /* Panel.swift in Sources */,
 				BFDAF99ECF19771555949878 /* SimulatedScene.swift in Sources */,
+				3560A88ABB5C70959F0CFCDA /* SpotMeter.swift in Sources */,
 				342B98B3F84D5FBD6A50BC15 /* TechFinderApp.swift in Sources */,
 				234909BE59B486AAD437B5EA /* ViewfinderView.swift in Sources */,
 			);

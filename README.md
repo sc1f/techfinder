@@ -10,17 +10,23 @@ A minimal iPhone viewfinder for technical-camera photographers. Choose a lens an
 - **Lens library.** Add, edit and delete lenses (focal length plus optional name). The list is sorted wide to long, and the angles of view shown are for the current format.
 - **Formats.** Digital backs are grouped by sensor size with their models listed (53.4 × 40, 53.7 × 40.4, 44 × 33, 45 × 30, 36 × 24). Film covers medium format (6×4.5 to 6×17) and large format (4×5, 5×7, 8×10). You can add custom formats.
 - **Light meter.**
-  - The top bar shows ISO, aperture and shutter. Change each by a third of a stop with its arrows, or swipe along the value.
-  - ISO is always set by hand.
-  - Tap the shutter to hold it (lock icon) and the aperture follows the light (A). Tap the aperture to do the opposite.
-  - Move the metered value by hand and both are then set manually.
-  - The meter reads from the iPhone camera's own metering, weighted to the tapped focus point. Dragging the sun adds exposure compensation.
-- **Exposure simulation.** The viewfinder is brightened or darkened by however many stops the chosen settings are over- or underexposed, within the phone's roughly ±8-stop range.
+  - The top bar shows ISO, aperture and shutter. Tap an arrow or swipe along a value to change it. Right raises the value (higher ISO, higher f-number, faster shutter); left lowers it. Steps are full stops by default, or ⅓ stop (Settings).
+  - ISO is always set by hand, and so is either the aperture or the shutter (lock icon). The meter gives the other (A). Tap the metered value, or change it, to set it by hand instead.
+- **Spot meter.**
+  - The meter reads a 3° spot, drawn as a circle, from the camera's video. It converts the spot's brightness to EV at ISO 100, so a mid-grey spot reads correct.
+  - The spot sits at the centre cross (the moved frame's centre with movements on). Tap to move it, and tap it again to return to the centre.
+  - Dragging up or down after a tap adds exposure compensation to both the preview and the recommendation.
+  - A metered value turns orange if most of the spot is clipped white.
 - **Controls.**
   - Under the meter are the tools: Grid, Reset Frame Size and Settings. Settings sets the ISO, aperture and shutter limits of your equipment; values outside them turn orange.
   - At the bottom, the lens and format pills sit above the lens selector. Tap either to change it.
   - The lens selector is Apple's segmented control. On iOS 26 the selection lifts into a glass lens as you drag across it, as in the Photos app. When there are more lenses than fit, it becomes a sliding pill like the Camera app's mode switcher.
   - Tap the image to focus and meter at that point, then drag up or down to brighten or darken. Tap elsewhere to move the point, or tap the square to return to automatic. The square hides after 3 seconds.
+- **Image circle and movements.**
+  - Give each lens its manufacturer image circle: one or two figures, such as 90 mm at f/11. The circle at the metered aperture is interpolated in stops, or estimated conservatively (marked *) when wider than any figure.
+  - Turn on Movements, choose Rise or Shift, and move only that axis: with the arrows, by swiping the value, or by dragging the image. Steps are 0.5 mm.
+  - The result view pans and zooms to the moved frame as the photo would look. Overview shows the whole image circle, the unmoved frame (dashed) and the moved frame.
+  - Movements stop at the image circle and at the camera's mechanical limits (Settings). The readout shows the millimetres left to the circle's edge, turning orange when close and red if a later aperture change puts a corner outside.
 - **Landscape.** Hold the phone sideways and the meter and tools move to the viewer's top edge, and the lens and format pills to the bottom edge. The lens labels turn, and sheets open as rotated glass cards.
 - **Readout.** The lens button shows the long × short angle of view and the full-frame-equivalent focal length. When the setup is wider than the iPhone's ultra-wide can see, the frame turns orange and the button adds a warning line.
 - **Orientation.** The frame's long side runs along the phone's long side: hold the phone in landscape for a landscape frame. The interface stays portrait like the Camera app. Icons and lens labels rotate, even with Rotation Lock on, and in landscape the readout moves to the side edge that is currently up.
@@ -90,4 +96,4 @@ One-time setup for TestFlight (requires the paid Apple Developer Program):
 
 ## Later
 
-Rise/fall and shift simulation, image-circle limits, saved scouting photos, a pan-and-stitch mode for setups wider than the iPhone's ultra-wide, and per-device field-of-view calibration.
+Tilt and swing, saved scouting photos, a pan-and-stitch mode for setups wider than the iPhone's ultra-wide, and per-device field-of-view calibration.

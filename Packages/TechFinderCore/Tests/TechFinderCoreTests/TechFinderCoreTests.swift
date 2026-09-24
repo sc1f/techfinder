@@ -143,7 +143,6 @@ final class ExposureTests: XCTestCase {
         let solution = ExposureSolver.solve(settings, meteredEV100: 15)
         XCTAssertEqual(solution.label(.shutter), "1/125")
         XCTAssertEqual(solution.meteredAxis, .shutter)
-        XCTAssertEqual(solution.exposureError, 0, accuracy: 1e-9)
     }
 
     func testShutterPriorityPicksAperture() {
@@ -159,14 +158,18 @@ final class ExposureTests: XCTestCase {
                                         shutterIndex: 0, mode: .aperturePriority)
         let solution = ExposureSolver.solve(settings, meteredEV100: 15, compensation: 1)
         XCTAssertEqual(solution.label(.shutter), "1/60")
-        XCTAssertEqual(solution.exposureError, 1, accuracy: 0.01)
     }
 
-    func testManualReportsOverAndUnderexposure() {
+    func testNoReadingLeavesTheMeteredValueUnset() {
         let settings = ExposureSettings(isoIndex: index(.iso, "100"), apertureIndex: index(.aperture, "16"),
-                                        shutterIndex: index(.shutter, "1/250"), mode: .manual)
-        XCTAssertEqual(ExposureSolver.solve(settings, meteredEV100: 15).exposureError, -1, accuracy: 1e-9)
-        XCTAssertNil(ExposureSolver.solve(settings, meteredEV100: 15).meteredAxis)
+                                        shutterIndex: index(.shutter, "1/250"), mode: .aperturePriority)
+        XCTAssertNil(ExposureSolver.solve(settings, meteredEV100: nil).meteredAxis)
+    }
+
+    func testOldManualModeLoadsAsAperturePriority() throws {
+        let json = #"{"isoIndex":12,"apertureIndex":18,"shutterIndex":18,"mode":"manual"}"#
+        let settings = try JSONDecoder().decode(ExposureSettings.self, from: Data(json.utf8))
+        XCTAssertEqual(settings.mode, .aperturePriority)
     }
 
     func testLimitsFlagMeteredValues() {
@@ -179,19 +182,20 @@ final class ExposureTests: XCTestCase {
         XCTAssertFalse(bright.isOutsideLimits(.shutter, .default))
     }
 
-    func testMovingTheMeteredValueSwitchesToManual() {
+    func testMovingTheMeteredValueSetsItByHand() {
         var settings = ExposureSettings(isoIndex: index(.iso, "100"), apertureIndex: index(.aperture, "16"),
                                         shutterIndex: 0, mode: .aperturePriority)
         let solution = ExposureSolver.solve(settings, meteredEV100: 15)
         settings.step(.shutter, by: 1, from: solution)
-        XCTAssertEqual(settings.mode, .manual)
-        XCTAssertEqual(ExposureScale.label(.shutter, settings.shutterIndex), "1/100")
-        XCTAssertEqual(ExposureScale.label(.aperture, settings.apertureIndex), "f/16")
-
-        let manual = ExposureSolver.solve(settings, meteredEV100: 15)
-        settings.lock(.shutter, from: manual)
+        // The shutter is now set by hand at 1/100 (⅓ stop more light), and the meter closes the aperture ⅓ stop.
         XCTAssertEqual(settings.mode, .shutterPriority)
         XCTAssertEqual(ExposureScale.label(.shutter, settings.shutterIndex), "1/100")
+        XCTAssertEqual(ExposureSolver.solve(settings, meteredEV100: 15).label(.aperture), "f/18")
+
+        let shutterPriority = ExposureSolver.solve(settings, meteredEV100: 15)
+        settings.lock(.aperture, from: shutterPriority)
+        XCTAssertEqual(settings.mode, .aperturePriority)
+        XCTAssertEqual(ExposureScale.label(.aperture, settings.apertureIndex), "f/18")
     }
 
     func testExposurePersistsWithTheLibrary() throws {

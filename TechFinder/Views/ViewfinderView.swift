@@ -14,6 +14,8 @@ struct ViewfinderView: View {
     /// Shown as a rotated card in landscape, where system sheets would appear sideways.
     @State private var panel: Sheet?
     @State private var focusMarker: FocusMarker?
+    /// A tapped metering spot; nil meters the centre cross (or the moved frame's centre).
+    @State private var tappedSpot: TappedSpot?
     /// Exposure compensation in stops for the current focus point, set by dragging after a tap.
     @State private var exposureBias: Float = 0
     @State private var exposureDragStart: Float?
@@ -36,6 +38,16 @@ struct ViewfinderView: View {
         let id = UUID()
         let location: CGPoint
     }
+
+    private struct TappedSpot: Equatable {
+        /// In the sensor's landscape image, 0...1.
+        var devicePoint: CGPoint
+        /// On the viewfinder image.
+        var location: CGPoint
+    }
+
+    /// The spot meter's angle of view.
+    static let spotAngle = 3.0
 
     /// The one animation for everything that moves when the phone turns.
     static let turn = Animation.spring(response: 0.42, dampingFraction: 0.86)
@@ -134,6 +146,16 @@ struct ViewfinderView: View {
                 } else if let solution {
                     FrameOverlay(solution: solution, showsGrid: showsGrid)
                 }
+                let spot = spotPlacement(imageSize: imageRect.size, zoom: movement?.layout.zoom ?? solution?.zoom ?? 1,
+                                         movement: movement, mapping: mapping)
+                Circle()
+                    .stroke(.white.opacity(0.85), lineWidth: 1)
+                    .frame(width: spot.radius * 2, height: spot.radius * 2)
+                    .position(spot.location)
+                    .allowsHitTesting(false)
+                    .onChange(of: spot.region, initial: true) { _, region in
+                        camera.setSpot(region)
+                    }
                 if let focusMarker {
                     FocusSquare(exposureBias: exposureBias, isAdjusting: exposureDragStart != nil)
                         .position(focusMarker.location)
@@ -176,7 +198,8 @@ struct ViewfinderView: View {
     private func topBlock(exposure: ExposureSolution, rotation: Angle) -> some View {
         VStack(spacing: 8) {
             MeterBar(settings: exposureSettings, solution: exposure, limits: library.exposureLimits,
-                     hasReading: camera.meteredEV != nil)
+                     hasReading: camera.meteredEV != nil, readingIsClipped: camera.meterIsClipped,
+                     step: library.meterStep)
             ToolRow(rotation: rotation, showsGrid: $showsGrid, showsMovements: movementsToggle,
                     canResetFill: abs(fill - Framing.defaultFill) > 0.001,
                     resetFill: { withAnimation(.smooth) { fill = Framing.defaultFill } },
@@ -229,8 +252,9 @@ struct ViewfinderView: View {
             .persistentSystemOverlays(.hidden)
             .onChange(of: zoom, initial: true) { _, zoom in
                 camera.setZoom(zoom)
-                // The camera returns to automatic focus and exposure for a new framing.
+                // The camera returns to automatic focus and exposure, metered at the centre, for a new framing.
                 focusMarker = nil
+                tappedSpot = nil
                 exposureBias = 0
             }
             .task(id: focusActivity) {
@@ -284,12 +308,12 @@ struct ViewfinderView: View {
             #endif
     }
 
-    /// Shows the chosen exposure in the viewfinder: the preview is brightened or darkened by however
-    /// many stops the settings are over- or underexposed.
+    /// The preview follows the exposure compensation dragged after a tap, so it looks as bright as the
+    /// meter's recommendation.
     private func simulation(_ content: some View, exposure: ExposureSolution) -> some View {
         content
-            .onChange(of: exposure.exposureError, initial: true) { _, error in
-                camera.setExposureBias(Float(error))
+            .onChange(of: exposureBias, initial: true) { _, bias in
+                camera.setExposureBias(bias)
             }
     }
 
@@ -351,7 +375,7 @@ struct ViewfinderView: View {
             let pill = GlassButtonMetrics.pillHeight
             GeometryReader { geometry in
                 // Distance from each screen edge to the centre of its turned block.
-                let topInset = 12 + (pill * 2 + 8) / 2
+                let topInset = 12 + (MeterBar.height * 2 + 8) / 2
                 let bottomInset = 12 + (pill + (isClipped ? 8 + WarningTag.height : 0)) / 2
                 let turnedLeft = orientation.hold == .landscapeLeft
 
@@ -395,14 +419,47 @@ struct ViewfinderView: View {
                       width: size.width, height: size.height)
     }
 
+    /// Where the spot meter reads, on screen and on the sensor: a tapped point, else the moved frame's
+    /// centre with movements on, else the centre cross. `radius` is in points.
+    private func spotPlacement(imageSize: CGSize, zoom: Double, movement: MovementInfo?,
+                               mapping: MovementMapping?) -> (location: CGPoint, radius: CGFloat, region: SpotMeter.Region) {
+        let optics = camera.optics
+        let halfWidth = optics.tanHalfShort / zoom
+        let halfLong = optics.tanHalfLong / zoom
+        let radiusTan = tan(Self.spotAngle / 2 * .pi / 180)
+        let pointsPerTan = mapping?.pointsPerTan ?? Double(imageSize.width) / (2 * halfWidth)
+        // Radius as a share of the sensor image's width (its long side) and height.
+        let radius = CGSize(width: radiusTan / (2 * halfLong), height: radiusTan / (2 * halfWidth))
+        let screenRadius = CGFloat(radiusTan * pointsPerTan)
+
+        if let tappedSpot, movement == nil {
+            return (tappedSpot.location, screenRadius, SpotMeter.Region(center: tappedSpot.devicePoint, radius: radius))
+        }
+        var tanX = 0.0
+        var tanY = 0.0
+        var location = CGPoint(x: imageSize.width / 2, y: imageSize.height / 2)
+        if let movement, let mapping {
+            tanX = movement.layout.frameCenterX
+            tanY = movement.layout.frameCenterY
+            location = mapping.point(x: tanX, y: tanY, in: imageSize)
+        }
+        // Portrait image position, then turned into the sensor's landscape coordinates.
+        let u = 0.5 + tanX / (2 * halfWidth)
+        let v = 0.5 + tanY / (2 * halfLong)
+        return (location, screenRadius, SpotMeter.Region(center: CGPoint(x: v, y: 1 - u), radius: radius))
+    }
+
     /// Moves the focus and metering point to a tap on the upright preview. Tapping the current point
     /// returns to automatic focus and exposure.
     private func focus(at location: CGPoint, in size: CGSize, transform: (scale: CGFloat, offset: CGSize)) {
         guard size.width > 0, size.height > 0 else { return }
-        if let focusMarker, hypot(focusMarker.location.x - location.x, focusMarker.location.y - location.y) < 40 {
+        if let tappedSpot, hypot(tappedSpot.location.x - location.x, tappedSpot.location.y - location.y) < 40 {
             camera.resetFocusAndExposure()
             exposureBias = 0
-            withAnimation(.smooth(duration: 0.2)) { self.focusMarker = nil }
+            withAnimation(.smooth(duration: 0.2)) {
+                self.focusMarker = nil
+                self.tappedSpot = nil
+            }
             return
         }
         exposureBias = 0
@@ -415,6 +472,7 @@ struct ViewfinderView: View {
         camera.focusAndMeter(at: devicePoint)
         withAnimation(.smooth(duration: 0.2)) {
             focusMarker = FocusMarker(location: location)
+            tappedSpot = TappedSpot(devicePoint: devicePoint, location: location)
         }
     }
 
@@ -591,7 +649,9 @@ private struct ToolButton: View {
     @Environment(\.isEnabled) private var isEnabled
     @State private var presses = 0
 
-    private static let width: CGFloat = 64
+    private static let width: CGFloat = 56
+    /// Matches the meter pills above.
+    private static let height: CGFloat = MeterBar.height
 
     var body: some View {
         Button {
@@ -599,13 +659,13 @@ private struct ToolButton: View {
             action()
         } label: {
             Image(systemName: systemImage)
-                .font(.system(size: 17, weight: .medium))
+                .font(.system(size: 15, weight: .medium))
                 .foregroundStyle(isOn ? Color.accentColor : .white)
                 .opacity(isEnabled ? 1 : 0.35)
                 .rotationEffect(rotation)
                 .animation(ViewfinderView.turn, value: rotation)
                 .frame(width: Self.width - GlassButtonMetrics.padding.leading - GlassButtonMetrics.padding.trailing,
-                       height: GlassButtonMetrics.pillLabelHeight)
+                       height: Self.height - GlassButtonMetrics.padding.top - GlassButtonMetrics.padding.bottom)
         }
         .glassButtonStyle(Capsule())
         .sensoryFeedback(.impact(weight: .medium, intensity: 1), trigger: presses)

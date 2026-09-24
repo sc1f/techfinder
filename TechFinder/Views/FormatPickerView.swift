@@ -66,8 +66,16 @@ struct FormatPickerView: View {
                     Button("Done", action: close)
                 }
             }
-            .navigationDestination(item: $editor) { item in
+            // Pushed in a sheet; from the sideways card, a portrait sheet of its own so the keyboard
+            // reads the right way up.
+            .navigationDestination(item: closePanel == nil ? $editor : .constant(nil)) { item in
                 FormatEditorView(item: item)
+            }
+            .sheet(item: closePanel == nil ? .constant(nil) : $editor) { item in
+                NavigationStack {
+                    FormatEditorView(item: item, isRoot: true)
+                }
+                .environment(\.closePanel, nil)
             }
         }
     }
@@ -123,12 +131,15 @@ struct FormatEditorView: View {
     @Environment(\.dismiss) private var dismiss
 
     let item: FormatEditorItem
+    /// The root of its own sheet, with a Cancel button.
+    let isRoot: Bool
     @State private var name: String
     @State private var widthText: String
     @State private var heightText: String
 
-    init(item: FormatEditorItem) {
+    init(item: FormatEditorItem, isRoot: Bool = false) {
         self.item = item
+        self.isRoot = isRoot
         _name = State(initialValue: item.format.name)
         _widthText = State(initialValue: item.isNew ? "" : Millimetres.label(item.format.longSide))
         _heightText = State(initialValue: item.isNew ? "" : Millimetres.label(item.format.shortSide))
@@ -167,6 +178,11 @@ struct FormatEditorView: View {
         .navigationTitle(item.isNew ? "New Format" : "Edit Format")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
+            if isRoot {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancel") { dismiss() }
+                }
+            }
             ToolbarItem(placement: .confirmationAction) {
                 Button("Save", action: save)
                     .disabled(dimensions == nil)

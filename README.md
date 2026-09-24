@@ -6,31 +6,32 @@ A minimal iPhone viewfinder for technical-camera photographers. Choose a lens an
 
 ## Features (MVP)
 
-- **Live framing.** The phone camera zooms so the taking frame fills about 85% of the view, and the scene around it is darkened. Pinch to show more or less of the surroundings. The camera autofocuses at the centre. An optional rule-of-thirds grid sits inside the frame.
-- **Lens library.** Add, edit and delete lenses (focal length plus optional name). The list is sorted wide to long, and the angles of view shown are for the current format.
+- **Live framing.** The phone camera zooms so the taking frame fills about 85% of the view, and the scene around it is darkened. Pinch to show more or less of the surroundings; a chip on the image shows the frame size (such as 1.3×) until you tap it to return to the standard size. The camera autofocuses at the centre. An optional rule-of-thirds grid sits inside the frame.
+- **Lens library.** Add, edit and delete lenses (focal length plus optional name). Tap a lens to use it; its info button or a long press edits it. Deleting from the editor, and Settings' Reset to Defaults, ask first. Choosing a lens with a name shows the name over the image for a moment. The list is sorted wide to long, and the angles of view shown are for the current format.
 - **Formats.** Digital backs are grouped by sensor size with their models listed (53.4 × 40, 53.7 × 40.4, 44 × 33, 45 × 30, 36 × 24). Film covers medium format (6×4.5 to 6×17) and large format (4×5, 5×7, 8×10). You can add custom formats.
 - **Light meter.**
   - The meter row shows ISO, aperture and shutter. Tap an arrow or swipe along a value to change it. Right raises the value (higher ISO, higher f-number, faster shutter); left lowers it.
   - Steps are full stops by default, landing on the standard series (ISO 100, 200, 400…; f/5.6, 8, 11…; 1/125, 1/250…), or ⅓ stop in Settings. The limit pickers in Settings follow the same steps; switching to full stops moves each limit to its nearest whole stop (f/1.1 becomes f/1).
-  - Tap ISO, aperture or shutter for a list of values within your limits: whole stops (1/30, 1/60, 1/125…; f/5.6, 8, 11…), or thirds with ⅓-stop steps. Picking the metered value sets it by hand.
+  - Tap ISO, aperture or shutter for a list of values within your limits (it holds still while open, even as the meter keeps reading): whole stops (1/30, 1/60, 1/125…; f/5.6, 8, 11…), or thirds with ⅓-stop steps. Picking the metered value sets it by hand.
   - ISO is always set by hand, and so is either the aperture or the shutter (lock icon). The meter gives the other (A). Pick the metered value from its list, or change it, to set it by hand instead.
 - **Spot meter.**
   - The meter reads a 3° spot, drawn as a circle at the centre cross (the moved frame's centre with movements on). It converts the spot's brightness to EV at ISO 100 using the camera's exposure, so a mid-grey spot reads correct.
   - The ISO pill shows the live reading as EV at ISO 100. To calibrate, meter a grey card with a handheld spot meter and set any consistent difference in Settings › Calibration.
-  - A metered value turns orange if most of the spot is clipped white.
+  - A metered value turns orange with a warning sign if most of the spot is clipped white; so does any value outside your limits.
+  - The first time, a label names the spot circle.
 - **Controls.**
   - All the controls sit below the camera image, within thumb reach, sharing out the space evenly. From the top down: the movement controls (with Movements on), a row of round buttons, the meter, and the lens selector on its own.
-  - The buttons, left to right: Settings, Reset Frame Size, Frame (sensor or film format), Lenses (add, edit and choose lenses), Movements and Grid. Settings sets the ISO, aperture and shutter limits of your equipment; values outside them turn orange.
+  - The labelled buttons, left to right: Settings, Frame (sensor or film format), Lenses (add, edit and choose lenses), Movements and Grid. Settings sets the ISO, aperture and shutter limits of your equipment; values outside them turn orange.
   - The controls never cover the camera image, which sits at the top. On a short screen such as the iPhone SE, the image shrinks when the controls need the room.
   - The lens selector is the system segmented control. On iOS 26, pressing or dragging lifts a clear glass lens that magnifies the lenses beneath it, as in the Photos app. The numbers turn with the phone without the control changing size. Its labels drop "mm" when that is what it takes to fit (up to about eight lenses); with more lenses than fit, it becomes a sliding row like the Camera app's mode switcher.
 - **Image circle and movements.**
-  - Give each lens its manufacturer image circle at one or more apertures, such as 80 mm at f/4 and 90 mm at f/11.
+  - Give each lens its manufacturer image circle at one or more apertures (whole stops from f/2.8 to f/64), such as 80 mm at f/4 and 90 mm at f/11.
   - Movements use the figure quoted at the aperture closest (in stops) to the meter's, so only your real data sheet figures are used. On a tie the wider aperture's smaller circle wins. The readout shows the figure in use, such as "IC 90 f/11".
-  - Turn on Movements, choose Rise or Shift, and move only that axis: with the arrows, by swiping the value, or by dragging the image. Steps are 0.5 mm. Double-tap the image to return the current axis to zero.
-  - The result view pans and zooms to the moved frame as the photo would look. Overview shows the whole image circle, the unmoved frame (dashed) and the moved frame.
+  - Turn on Movements, choose Rise or Shift, and move only that axis: with the arrows, by swiping the value, or by dragging the image. Steps are 0.5 mm. Tap the value for a menu to reset it, or both axes, to zero. Double-tapping the image also resets the current axis, with a few seconds to undo.
+  - The result view pans and zooms to the moved frame as the photo would look. The dashed-circle button shows the overview, which shows the whole image circle, the unmoved frame (dashed) and the moved frame.
   - With an ultra-wide lens, the image circle or a moved frame can reach past what the iPhone camera sees, even at its widest. That area is hatched, with the camera's edge dashed, and "Wider than the iPhone can see" shows above the movement controls. The overview zooms out to show the whole image circle.
   - Movements stop at the image circle and at the camera's mechanical limits (Settings). The readout shows the millimetres left to the circle's edge, turning orange when close and red if a later aperture change puts a corner outside.
-- **Landscape.** Hold the phone sideways and the controls stay where they are, with their icons and text turned to read upright. The meter pills stand upright to you, shutter, aperture and ISO from the top, with up raising a value; their lists open turned too. The lens labels turn smoothly with the phone, the movement controls run along the viewer's bottom edge, and sheets open as rotated glass cards.
+- **Landscape.** Hold the phone sideways and the controls stay where they are, with their icons and text turned to read upright. The meter pills stand upright to you, shutter, aperture and ISO from the top, with up raising a value; their lists open turned too. The lens labels turn smoothly with the phone, the movement controls run along the viewer's bottom edge, and lists open as rotated glass cards; anything you type into (a new lens, a custom format) opens as a portrait sheet so the keyboard reads the right way up.
 - **Too wide.** When the setup is wider than the iPhone's ultra-wide can see, the frame turns orange and "Wider than the iPhone can see" shows above the buttons.
 - **Orientation.** The frame's long side runs along the phone's long side: hold the phone in landscape for a landscape frame. The interface stays portrait like the Camera app. Icons and lens labels rotate, even with Rotation Lock on.
 - **Liquid Glass.** Controls use `glassEffect` when built with the iOS 26+ SDK (Xcode 26+), on a plain black background. Older SDKs use solid dark controls (see `TechFinder/Support/Glass.swift`).

@@ -1,7 +1,8 @@
 import SwiftUI
 import TechFinderCore
 
-/// Lists saved lenses. Tapping a lens puts it on the camera; edit and delete via the row button or a swipe.
+/// Lists saved lenses. Tapping a lens puts it on the camera; its info button, a long press or a swipe edits
+/// or deletes it.
 struct LensLibraryView: View {
     @Environment(LibraryStore.self) private var library
     @Environment(\.dismiss) private var dismiss
@@ -48,8 +49,16 @@ struct LensLibraryView: View {
                     }
                 }
             }
-            .navigationDestination(item: $editor) { item in
+            // Pushed in a sheet; from the sideways card, a portrait sheet of its own so the keyboard
+            // reads the right way up.
+            .navigationDestination(item: closePanel == nil ? $editor : .constant(nil)) { item in
                 LensEditorView(item: item)
+            }
+            .sheet(item: closePanel == nil ? .constant(nil) : $editor) { item in
+                NavigationStack {
+                    LensEditorView(item: item, isRoot: true)
+                }
+                .environment(\.closePanel, nil)
             }
         }
     }
@@ -96,11 +105,18 @@ struct LensLibraryView: View {
             Button {
                 editor = .edit(lens)
             } label: {
-                Image(systemName: "slider.horizontal.3")
-                    .foregroundStyle(.secondary)
+                Image(systemName: "info.circle")
+                    .font(.title3)
+                    .foregroundStyle(.tint)
+                    .frame(width: 44, height: 44)
+                    .contentShape(Rectangle())
             }
             .buttonStyle(.borderless)
             .accessibilityLabel("Edit \(lens.displayName)")
+        }
+        .contextMenu {
+            Button("Edit", systemImage: "pencil") { editor = .edit(lens) }
+            Button("Delete", systemImage: "trash", role: .destructive) { library.deleteLens(id: lens.id) }
         }
         .swipeActions {
             Button(role: .destructive) {

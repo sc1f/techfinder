@@ -201,27 +201,40 @@ struct MovementBar: View {
     let margin: Double?
     /// The image circle in use: diameter, the aperture it's taken at, and whether it's an estimate.
     let imageCircle: (diameter: Double, aperture: Double, isEstimate: Bool)?
+    /// How the phone is turned, for the reset menu, which opens in screen space.
+    let rotation: Angle
     /// Moves the chosen axis by a number of millimetres, stopping at the limits.
     let step: (Double) -> Void
+    /// Returns both axes to zero.
+    let resetAll: () -> Void
 
     var body: some View {
         HStack(spacing: 8) {
-            HStack(spacing: 6) {
-                axisButton(.rise, title: "Rise")
-                axisButton(.shift, title: "Shift")
+            Picker("Axis", selection: $state.axis) {
+                Text("Rise").tag(MovementAxis.rise)
+                Text("Shift").tag(MovementAxis.shift)
             }
-            MovementDial(value: state.movement[state.axis], caption: caption, captionColor: captionColor,
-                         step: step, reset: { step(-state.movement[state.axis]) })
+            .pickerStyle(.segmented)
+            .controlSize(.large)
+            .fixedSize()
+            .accessibilityIdentifier("axisPicker")
+
+            MovementDial(axis: state.axis, value: state.movement[state.axis], caption: caption,
+                         captionLevel: captionLevel, rotation: rotation, step: step,
+                         reset: { step(-state.movement[state.axis]) }, resetAll: resetAll)
+
             Button {
                 withAnimation(.smooth(duration: 0.35)) { state.showsOverview.toggle() }
             } label: {
-                Image(systemName: state.showsOverview ? "viewfinder" : "circle.dashed")
+                // One icon; highlighted while the overview shows.
+                Image(systemName: "circle.dashed")
                     .font(.system(size: 17, weight: .medium))
                     .foregroundStyle(state.showsOverview ? Color.accentColor : .white)
                     .frame(width: 24, height: GlassButtonMetrics.pillLabelHeight)
             }
             .glassButtonStyle(Capsule())
-            .accessibilityLabel(state.showsOverview ? "Show Result" : "Show Image Circle")
+            .accessibilityLabel("Image Circle Overview")
+            .accessibilityAddTraits(state.showsOverview ? .isSelected : [])
             .accessibilityIdentifier("overviewButton")
         }
     }
@@ -233,70 +246,112 @@ struct MovementBar: View {
         return "\(Millimetres.label(margin)) mm to edge · \(circle)"
     }
 
-    private var captionColor: Color {
-        guard let margin else { return .secondary }
-        return margin < 0 ? .red : (margin < MovementOverlay.closeMargin ? .orange : .secondary)
-    }
-
-    private func axisButton(_ axis: MovementAxis, title: String) -> some View {
-        Button {
-            state.axis = axis
-        } label: {
-            Text(title)
-                .font(.footnote.weight(.semibold))
-                .foregroundStyle(state.axis == axis ? Color.accentColor : .white)
-                .frame(height: GlassButtonMetrics.pillLabelHeight)
-        }
-        .glassButtonStyle(Capsule())
-        .accessibilityAddTraits(state.axis == axis ? .isSelected : [])
-        .accessibilityIdentifier("axis-\(axis.rawValue)")
+    /// Orange with a warning sign when a corner is near the circle's edge; red with an error sign when
+    /// one is outside it.
+    private var captionLevel: MovementDial.Level {
+        guard let margin else { return .normal }
+        return margin < 0 ? .error : (margin < MovementOverlay.closeMargin ? .warning : .normal)
     }
 }
 
-/// The chosen axis's movement with step arrows; swipe along it to move further, tap to return to zero.
-private struct MovementDial: View {
+/// The chosen axis's movement with step arrows; swipe along it to move further. Tapping it opens a menu
+/// to return it, or both axes, to zero.
+struct MovementDial: View {
+    enum Level { case normal, warning, error }
+
+    let axis: MovementAxis
     let value: Double
     let caption: String
-    let captionColor: Color
+    let captionLevel: Level
+    let rotation: Angle
     let step: (Double) -> Void
     let reset: () -> Void
+    let resetAll: () -> Void
 
     @State private var swipeSteps = 0
-
+    @State private var showsMenu = false
     private let increment = 0.5
     private let stepDistance: CGFloat = 12
 
     var body: some View {
         HStack(spacing: 0) {
             arrow("chevron.left") { step(-increment) }
+
             VStack(spacing: 0) {
-                Text(caption)
-                    .font(.system(size: 9, weight: .medium))
-                    .foregroundStyle(captionColor)
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.7)
+                HStack(spacing: 3) {
+                    switch captionLevel {
+                    case .normal: EmptyView()
+                    case .warning: Image(systemName: "exclamationmark.triangle.fill")
+                    case .error: Image(systemName: "xmark.octagon.fill")
+                    }
+                    Text(caption)
+                }
+                .font(.caption2.weight(.medium))
+                .foregroundStyle(captionColor)
+                .lineLimit(1)
+                .minimumScaleFactor(0.7)
                 Text(label)
-                    .font(.footnote.weight(.semibold).monospacedDigit())
+                    .font(.subheadline.weight(.semibold).monospacedDigit())
                     .foregroundStyle(.white)
                     .contentTransition(.numericText())
             }
+            .dynamicTypeSize(...DynamicTypeSize.xLarge)
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .contentShape(Rectangle())
-            .onTapGesture(perform: reset)
-            .gesture(swipe)
+            .onTapGesture { showsMenu = true }
+            .popover(isPresented: $showsMenu) {
+                resetMenu
+                    .rotationEffect(rotation)
+                    .presentationCompactAdaptation(.popover)
+            }
+
             arrow("chevron.right") { step(increment) }
         }
+        .gesture(swipe)
         .frame(minWidth: 120)
         .frame(height: GlassButtonMetrics.pillHeight)
         .glassSurface(Capsule(), interactive: true)
         .animation(.smooth(duration: 0.15), value: value)
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel("Movement")
+        .accessibilityLabel(axis == .rise ? "Rise" : "Shift")
         .accessibilityValue(label)
         .accessibilityAdjustableAction { direction in
             step(direction == .increment ? increment : -increment)
         }
+        .accessibilityAction(named: "Reset to Zero", reset)
         .accessibilityIdentifier("movementDial")
+    }
+
+    private var resetMenu: some View {
+        VStack(spacing: 0) {
+            menuButton("Reset \(axis == .rise ? "Rise" : "Shift") to 0") { reset() }
+            Divider()
+            menuButton("Reset Rise and Shift") { resetAll() }
+        }
+        .frame(width: 240)
+        .accessibilityIdentifier("movementMenu")
+    }
+
+    private func menuButton(_ title: String, action: @escaping () -> Void) -> some View {
+        Button {
+            action()
+            showsMenu = false
+        } label: {
+            Text(title)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.horizontal, 16)
+                .frame(height: 44)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+    }
+
+    private var captionColor: Color {
+        switch captionLevel {
+        case .normal: .secondary
+        case .warning: .orange
+        case .error: .red
+        }
     }
 
     private var label: String {
@@ -306,9 +361,9 @@ private struct MovementDial: View {
     private func arrow(_ systemImage: String, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             Image(systemName: systemImage)
-                .font(.system(size: 11, weight: .bold))
+                .font(.system(size: 12, weight: .bold))
                 .foregroundStyle(.white.opacity(0.7))
-                .frame(width: 24)
+                .frame(width: 30)
                 .frame(maxHeight: .infinity)
                 .contentShape(Rectangle())
         }

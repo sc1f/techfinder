@@ -26,7 +26,7 @@ struct MeterBar: View {
     let rotation: Angle
 
     /// Taller held sideways, where the pill's height is the width the turned text has.
-    static func height(turned: Bool) -> CGFloat { turned ? 52 : 40 }
+    static func height(turned: Bool) -> CGFloat { turned ? 56 : 44 }
 
     var body: some View {
         // The viewer's top is the screen's right when turned left (+90°), its left when turned right.
@@ -106,7 +106,8 @@ private struct MeterDial: View {
     /// Steps already applied during the current swipe.
     @State private var swipeSteps = 0
     @State private var ticks = 0
-    @State private var showsChoices = false
+    /// The list as it was when opened: it holds still while the meter keeps reading.
+    @State private var openList: (choices: [(index: Int, label: String)], selected: Int)?
     @GestureState private var isTouching = false
 
     private let stepDistance: CGFloat = 26
@@ -124,6 +125,8 @@ private struct MeterDial: View {
             arrow("chevron.right", enabled: sign > 0 ? canRaise : canLower) { apply(sign) }
         }
         .frame(height: MeterBar.height(turned: rotation != .zero))
+        // Swipe anywhere along the pill, arrows included.
+        .gesture(swipe)
         // Plain glass: interactive glass stretches with the finger, which a swipe control shouldn't.
         // A faint highlight shows the touch instead, without changing the pill's size.
         .glassSurface(Capsule())
@@ -134,23 +137,24 @@ private struct MeterDial: View {
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(caption)
         .accessibilityValue(value)
+        .accessibilityHint(isWarning ? "Outside your equipment limits" : "")
         .accessibilityAdjustableAction { direction in
             apply(direction == .increment ? 1 : -1)
         }
     }
 
-    /// The caption and value. Tapping opens the list of choices; swiping steps it.
+    /// The caption and value. Tapping opens the list of choices, frozen at the values of that moment.
     private var valueArea: some View {
         valueLabel
-            .onTapGesture { showsChoices = true }
-            .gesture(swipe)
-            .popover(isPresented: $showsChoices) {
+            .onTapGesture { openList = (choices, selectedChoice) }
+            .popover(isPresented: Binding(get: { openList != nil }, set: { if !$0 { openList = nil } })) {
                 // The list opens in screen space, so it turns on its own to read upright.
                 let isTurned = rotation != .zero
-                ChoiceList(title: caption, choices: choices, selected: selectedChoice) { index in
+                ChoiceList(title: caption, choices: openList?.choices ?? choices,
+                           selected: openList?.selected ?? selectedChoice) { index in
                     select(index)
                     ticks += 1
-                    showsChoices = false
+                    openList = nil
                 }
                 .rotationEffect(rotation)
                 .frame(width: isTurned ? ChoiceList.size.height : ChoiceList.size.width,
@@ -189,25 +193,34 @@ private struct MeterDial: View {
                     EmptyView()
                 }
             }
-            .font(.system(size: 8, weight: .medium))
+            .font(.caption2.weight(.medium))
             .foregroundStyle(.secondary)
             .lineLimit(1)
-            .minimumScaleFactor(0.75)
+            .minimumScaleFactor(0.65)
 
-            Text(value)
-                .font(.system(size: 13, weight: .semibold).monospacedDigit())
-                .foregroundStyle(isWarning ? Color.orange : .white)
-                .lineLimit(1)
-                .minimumScaleFactor(0.8)
+            HStack(spacing: 2) {
+                // Not colour alone: a warning sign marks a value outside the limits or a clipped reading.
+                if isWarning {
+                    Image(systemName: "exclamationmark.triangle.fill")
+                        .font(.caption2)
+                        .accessibilityLabel("Outside limits")
+                }
+                Text(value)
+                    .font(.subheadline.weight(.semibold).monospacedDigit())
+            }
+            .foregroundStyle(isWarning ? Color.orange : .white)
+            .lineLimit(1)
+            .minimumScaleFactor(0.7)
         }
+        .dynamicTypeSize(...DynamicTypeSize.xLarge)
     }
 
     private func arrow(_ systemImage: String, enabled: Bool, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             Image(systemName: systemImage)
-                .font(.system(size: 10, weight: .bold))
+                .font(.system(size: 12, weight: .bold))
                 .foregroundStyle(.white.opacity(enabled ? 0.7 : 0.2))
-                .frame(width: 22)
+                .frame(width: 30)
                 .frame(maxHeight: .infinity)
                 .contentShape(Rectangle())
         }

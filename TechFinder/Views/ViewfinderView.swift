@@ -22,6 +22,12 @@ struct ViewfinderView: View {
     @State private var movementStops = 0
     /// The screen's safe area. Full-screen layers ignore it, so it is read from the screen's own frame.
     @State private var safeArea = EdgeInsets()
+    /// A movement a double-tap just returned to zero, which the banner offers to put back.
+    @State private var undoableReset: (axis: MovementAxis, value: Double, id: UUID)?
+    /// The lens nickname shown briefly over the image after choosing a lens.
+    @State private var lensNotice: (name: String, id: UUID)?
+    @AppStorage("hasSeenSpotHint") private var hasSeenSpotHint = false
+    @State private var showsSpotHint = false
 
     enum Sheet: String, Identifiable {
         case lenses, formats, newLens, settings
@@ -147,6 +153,20 @@ struct ViewfinderView: View {
                     .onChange(of: spot.region, initial: true) { _, region in
                         camera.setSpot(region)
                     }
+                if showsSpotHint {
+                    // Below the circle as the viewer holds the phone.
+                    let angle = orientation.rotation.radians
+                    let distance = spot.radius + 16
+                    Text("Spot meter")
+                        .font(.caption2.weight(.semibold))
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 3)
+                        .glassSurface(Capsule())
+                        .rotationEffect(orientation.rotation)
+                        .position(x: spot.location.x - sin(angle) * distance, y: spot.location.y + cos(angle) * distance)
+                        .allowsHitTesting(false)
+                        .transition(.opacity)
+                }
             }
             .frame(width: imageRect.width, height: imageRect.height)
             .clipped()
@@ -154,13 +174,37 @@ struct ViewfinderView: View {
             .accessibilityElement(children: .contain)
             .accessibilityIdentifier("viewfinderImage")
             .onTapGesture(count: 2) {
-                if let movement { move(movements.axis, to: 0, info: movement) }
+                guard let movement else { return }
+                let axis = movements.axis
+                let previous = movements.movement[axis]
+                guard previous != 0 else { return }
+                move(axis, to: 0, info: movement)
+                withAnimation(.smooth(duration: 0.25)) { undoableReset = (axis, previous, UUID()) }
             }
             .gesture(imageDrag(movement: movement, mapping: mapping))
             .position(x: imageRect.midX, y: imageRect.midY)
+
+            // Over the image but outside its gestures, so the buttons are hit and reported where they are.
+            ImageNotices(rotation: orientation.rotation, size: imageRect.size,
+                         lensName: lensNotice?.name, undo: undoText,
+                         performUndo: performUndo,
+                         zoom: abs(fill - Framing.defaultFill) > 0.001 ? fill / Framing.defaultFill : nil,
+                         resetZoom: { withAnimation(.smooth) { fill = Framing.defaultFill } })
+                .position(x: imageRect.midX, y: imageRect.midY)
         }
         .ignoresSafeArea()
         .gesture(pinchToAdjustFill)
+    }
+
+    private var undoText: String? {
+        undoableReset.map { "\($0.axis == .rise ? "Rise" : "Shift") reset to 0" }
+    }
+
+    private func performUndo() {
+        guard let reset = undoableReset, let movement = movementInfo(exposure: ExposureSolver.solve(library.exposure, meteredEV100: meteredEV)) else { return }
+        movements.axis = reset.axis
+        move(reset.axis, to: reset.value, info: movement)
+        withAnimation(.smooth(duration: 0.2)) { undoableReset = nil }
     }
 
     /// Everything sits below the camera image, within thumb reach, sharing out the band evenly: the
@@ -178,8 +222,6 @@ struct ViewfinderView: View {
                     Spacer(minLength: Self.rowSpacing)
                 }
                 ToolRow(rotation: orientation.rotation, showsGrid: $showsGrid, showsMovements: movementsToggle,
-                        canResetFill: abs(fill - Framing.defaultFill) > 0.001,
-                        resetFill: { withAnimation(.smooth) { fill = Framing.defaultFill } },
                         present: present)
                 Spacer(minLength: Self.rowSpacing)
                 MeterBar(settings: exposureSettings, solution: exposure, limits: library.exposureLimits,
@@ -210,9 +252,12 @@ struct ViewfinderView: View {
                         .transition(.opacity.combined(with: .scale(scale: 0.9, anchor: .bottom)))
                 }
                 MovementBar(state: $movements, margin: movement.margin,
-                            imageCircle: movement.imageCircle.map { ($0.diameter, movement.aperture, $0.isEstimate) }) { delta in
-                    move(movements.axis, to: movements.movement[movements.axis] + delta, info: movement)
-                }
+                            imageCircle: movement.imageCircle.map { ($0.diameter, movement.aperture, $0.isEstimate) },
+                            rotation: orientation.rotation,
+                            step: { delta in
+                                move(movements.axis, to: movements.movement[movements.axis] + delta, info: movement)
+                            },
+                            resetAll: { movements.movement = .zero })
             }
             .animation(.smooth, value: movement.layout.isBeyondCamera)
             .transition(.opacity)
@@ -256,6 +301,33 @@ struct ViewfinderView: View {
             .animation(Self.turn, value: orientation.hold)
             .statusBarHidden()
             .persistentSystemOverlays(.hidden)
+            .task(id: undoableReset?.id) {
+                // The undo offer lasts a few seconds.
+                guard undoableReset != nil else { return }
+                try? await Task.sleep(for: .seconds(4))
+                guard !Task.isCancelled else { return }
+                withAnimation(.easeOut(duration: 0.3)) { undoableReset = nil }
+            }
+            .onChange(of: library.selectedLensID) {
+                // A new lens's nickname, if it has one, shows briefly over the image.
+                let name = library.selectedLens?.name.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+                withAnimation(.smooth(duration: 0.25)) { lensNotice = name.isEmpty ? nil : (name, UUID()) }
+            }
+            .task(id: lensNotice?.id) {
+                guard lensNotice != nil else { return }
+                try? await Task.sleep(for: .seconds(1.5))
+                guard !Task.isCancelled else { return }
+                withAnimation(.easeOut(duration: 0.4)) { lensNotice = nil }
+            }
+            .task {
+                // The first time, name the circle in the middle of the frame.
+                guard !hasSeenSpotHint else { return }
+                try? await Task.sleep(for: .seconds(0.8))
+                withAnimation(.easeIn(duration: 0.3)) { showsSpotHint = true }
+                try? await Task.sleep(for: .seconds(4))
+                withAnimation(.easeOut(duration: 0.5)) { showsSpotHint = false }
+                hasSeenSpotHint = true
+            }
             .onChange(of: zoom, initial: true) { _, zoom in
                 camera.setZoom(zoom)
             }
@@ -329,8 +401,10 @@ struct ViewfinderView: View {
 
     // MARK: - Presentation
 
+    /// Held sideways, lists open as turned cards; a new lens, which is typed in, opens as a portrait
+    /// sheet so the keyboard reads the right way up.
     private func present(_ destination: Sheet) {
-        if orientation.isLandscape {
+        if orientation.isLandscape, destination != .newLens {
             withAnimation(.smooth(duration: 0.25)) { panel = destination }
         } else {
             sheet = destination
@@ -393,7 +467,8 @@ struct ViewfinderView: View {
     private func screenLayout(_ geometry: GeometryProxy, solution: FramingSolution?, movement: MovementInfo?) -> ScreenLayout {
         // As in `controls`: lens selector, meter, buttons and (upright) the movement controls or warning.
         let pill = GlassButtonMetrics.pillHeight
-        var bottom = 8 + pill + Self.rowSpacing + MeterBar.height(turned: orientation.isLandscape) + Self.rowSpacing + pill
+        var bottom = 8 + pill + Self.rowSpacing + MeterBar.height(turned: orientation.isLandscape) + Self.rowSpacing
+            + ToolRow.height
         let setup = setupBlockHeight(solution: solution, movement: movement)
         if !orientation.isLandscape, setup > 0 {
             bottom += Self.rowSpacing + setup
@@ -482,56 +557,135 @@ struct ViewfinderView: View {
     }
 }
 
+// MARK: - Notices
+
+/// Brief notices over the camera image, laid out the way the phone is held: the lens nickname and an
+/// undo offer at the top, and the frame-size chip at the bottom, which resets the pinch when tapped.
+private struct ImageNotices: View {
+    let rotation: Angle
+    let size: CGSize
+    let lensName: String?
+    let undo: String?
+    let performUndo: () -> Void
+    /// Frame size relative to the standard fill, when pinched away from it.
+    let zoom: Double?
+    let resetZoom: () -> Void
+
+    var body: some View {
+        let isTurned = rotation != .zero
+        VStack(spacing: 8) {
+            if let lensName {
+                Text(lensName)
+                    .font(.subheadline.weight(.semibold))
+                    .padding(.horizontal, 14)
+                    .frame(height: 32)
+                    .glassSurface(Capsule())
+                    .allowsHitTesting(false)
+                    .transition(.opacity.combined(with: .scale(scale: 0.9)))
+                    .accessibilityIdentifier("lensNotice")
+            }
+            if let undo {
+                HStack(spacing: 12) {
+                    Text(undo)
+                        .font(.footnote)
+                    Button("Undo", action: performUndo)
+                        .font(.footnote.weight(.semibold))
+                        .foregroundStyle(Color.accentColor)
+                        .frame(minHeight: 44)
+                }
+                .padding(.leading, 14)
+                .padding(.trailing, 6)
+                .glassSurface(Capsule())
+                .transition(.move(edge: .top).combined(with: .opacity))
+                .accessibilityIdentifier("undoBanner")
+            }
+            Spacer(minLength: 0)
+            if let zoom {
+                Button(action: resetZoom) {
+                    Text(String(format: "%.1f×", zoom))
+                        .font(.footnote.weight(.semibold).monospacedDigit())
+                        .padding(.horizontal, 12)
+                        .frame(minWidth: 44, minHeight: 32)
+                        .contentShape(Capsule())
+                }
+                .buttonStyle(.plain)
+                .glassSurface(Capsule(), interactive: true)
+                .frame(minHeight: 44)
+                .accessibilityLabel("Frame size \(String(format: "%.1f", zoom)) times")
+                .accessibilityHint("Returns to the standard frame size")
+                .accessibilityIdentifier("zoomChip")
+                .transition(.opacity)
+            }
+        }
+        .padding(12)
+        .frame(width: isTurned ? size.height : size.width, height: isTurned ? size.width : size.height)
+        // Turned only when the phone is: accessibility frames don't follow a rotation, even of 0°, so
+        // VoiceOver (and taps by accessibility) would miss the buttons.
+        .modifier(TurnedWhenSideways(rotation: rotation))
+        .frame(width: size.width, height: size.height)
+        .animation(.smooth(duration: 0.25), value: zoom == nil)
+    }
+}
+
+private struct TurnedWhenSideways: ViewModifier {
+    let rotation: Angle
+
+    func body(content: Content) -> some View {
+        if rotation == .zero {
+            content
+        } else {
+            content.rotationEffect(rotation)
+        }
+    }
+}
+
 // MARK: - Tools
 
-/// Round buttons above the meter: settings, reset frame size, frame (format), lenses, movements and
-/// grid, spread across the width.
+/// Round buttons above the meter, each labelled: settings, frame (format), lenses, movements and grid,
+/// spread across the width. Held sideways the labels hide, as they would read sideways.
 private struct ToolRow: View {
     let rotation: Angle
     @Binding var showsGrid: Bool
     @Binding var showsMovements: Bool
-    let canResetFill: Bool
-    let resetFill: () -> Void
     let present: (ViewfinderView.Sheet) -> Void
 
     @Environment(LibraryStore.self) private var library
 
+    static let height: CGFloat = GlassButtonMetrics.pillHeight + 3 + 14
+
     var body: some View {
-        HStack(spacing: 0) {
-            RoundGlassButton(systemImage: "slider.horizontal.3", label: "Settings", rotation: rotation) {
-                present(.settings)
-            }
-            .accessibilityIdentifier("settingsButton")
+        HStack(alignment: .top, spacing: 0) {
+            tool("slider.horizontal.3", "Settings", id: "settingsButton") { present(.settings) }
             Spacer(minLength: 4)
-            RoundGlassButton(systemImage: "arrow.counterclockwise", label: "Reset Frame Size", rotation: rotation) {
-                resetFill()
-            }
-            .disabled(!canResetFill)
-            .accessibilityIdentifier("resetFrameButton")
+            tool("aspectratio", "Frame", id: "formatButton",
+                 accessibility: "Frame: \(library.selectedFormat.name)") { present(.formats) }
             Spacer(minLength: 4)
-            RoundGlassButton(systemImage: "aspectratio", label: "Frame: \(library.selectedFormat.name)",
-                             rotation: rotation) {
-                present(.formats)
-            }
-            .accessibilityHint("Choose the sensor or film format")
-            .accessibilityIdentifier("formatButton")
-            Spacer(minLength: 4)
-            RoundGlassButton(systemImage: "camera.aperture", label: "Lenses", rotation: rotation) {
+            tool("camera.aperture", "Lenses", id: "lensButton") {
                 present(library.lenses.isEmpty ? .newLens : .lenses)
             }
-            .accessibilityHint("Add, edit and choose lenses")
-            .accessibilityIdentifier("lensButton")
             Spacer(minLength: 4)
-            RoundGlassButton(systemImage: "arrow.up.and.down.and.arrow.left.and.right", label: "Movements",
-                             isOn: showsMovements, rotation: rotation) {
-                showsMovements.toggle()
-            }
-            .accessibilityIdentifier("movementsButton")
+            tool("arrow.up.and.down.and.arrow.left.and.right", "Movements", id: "movementsButton",
+                 isOn: showsMovements) { showsMovements.toggle() }
             Spacer(minLength: 4)
-            RoundGlassButton(systemImage: "grid", label: "Grid", isOn: showsGrid, rotation: rotation) {
-                showsGrid.toggle()
-            }
-            .accessibilityIdentifier("gridButton")
+            tool("grid", "Grid", id: "gridButton", isOn: showsGrid) { showsGrid.toggle() }
+        }
+        .frame(height: Self.height, alignment: .top)
+    }
+
+    private func tool(_ systemImage: String, _ title: String, id: String, accessibility: String? = nil,
+                      isOn: Bool = false, action: @escaping () -> Void) -> some View {
+        VStack(spacing: 3) {
+            RoundGlassButton(systemImage: systemImage, label: accessibility ?? title, isOn: isOn,
+                             rotation: rotation, action: action)
+                .accessibilityIdentifier(id)
+            Text(title)
+                .font(.system(size: 11, weight: .medium))
+                .foregroundStyle(isOn ? Color.accentColor : .secondary)
+                .lineLimit(1)
+                .fixedSize()
+                .frame(width: RoundGlassButton.size)
+                .opacity(rotation == .zero ? 1 : 0)
+                .accessibilityHidden(true)
         }
     }
 }

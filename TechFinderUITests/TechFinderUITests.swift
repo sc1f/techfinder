@@ -12,9 +12,7 @@ final class TechFinderUITests: XCTestCase {
 
         let grid = app.buttons["gridButton"]
         XCTAssertTrue(grid.waitForExistence(timeout: 15), "Grid button should appear")
-        let reset = app.buttons["resetFrameButton"]
-        XCTAssertTrue(reset.exists)
-        XCTAssertFalse(reset.isEnabled, "Reset is disabled until the frame size changes")
+        XCTAssertFalse(app.buttons["zoomChip"].exists, "The frame-size chip shows only after a pinch")
 
         grid.tap()
         attachScreenshot(of: app, named: "grid-toggled")
@@ -90,11 +88,11 @@ final class TechFinderUITests: XCTestCase {
         let down = dial.coordinate(withNormalizedOffset: CGVector(dx: 0.07, dy: 0.5))
 
         // Shift first, then rise: each axis moves on its own.
-        app.buttons["axis-shift"].tap()
+        app.buttons["Shift"].tap()
         down.tap()
         XCTAssertEqual(dial.value as? String, "-0.5 mm", "One step shifts half a millimetre")
 
-        app.buttons["axis-rise"].tap()
+        app.buttons["Rise"].tap()
         XCTAssertEqual(dial.value as? String, "0 mm", "Rise starts at zero")
         for _ in 0..<32 { up.tap() }
         let risen = dial.value as? String ?? ""
@@ -105,7 +103,7 @@ final class TechFinderUITests: XCTestCase {
         XCTAssertGreaterThan(millimetres, 10, "Rose to the image circle, got \(risen)")
         XCTAssertLessThan(millimetres, 14, "Stopped at the image circle, got \(risen)")
 
-        app.buttons["axis-shift"].tap()
+        app.buttons["Shift"].tap()
         XCTAssertEqual(dial.value as? String, "-0.5 mm", "Rising left the shift alone")
 
         app.buttons["overviewButton"].tap()
@@ -128,9 +126,64 @@ final class TechFinderUITests: XCTestCase {
         let value = dial.value as? String ?? ""
         XCTAssertTrue(value.hasPrefix("+"), "Dragging down should rise, got \(value)")
 
-        // Double-tapping the image returns the current movement to zero.
+        // Double-tapping the image returns the current movement to zero, with an offer to undo.
         window.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.4)).doubleTap()
         XCTAssertEqual(dial.value as? String, "0 mm", "Double-tap resets the rise")
+        let undo = app.buttons["Undo"]
+        XCTAssertTrue(undo.waitForExistence(timeout: 2), "Resetting offers Undo")
+        undo.tap()
+        XCTAssertEqual(dial.value as? String, value, "Undo puts the rise back")
+    }
+
+    /// Tapping the movement value opens a menu to reset it; the arrows and menu don't move the frame.
+    func testMovementMenuResets() {
+        let app = XCUIApplication.fresh()
+        app.launchArguments += ["-TFImageCircle", "90", "-TFMovements", "YES", "-TFRise", "6", "-TFShift", "3",
+                                "-TFOverview", "NO"]
+        app.launch()
+
+        let dial = app.otherElements["movementDial"].firstMatch
+        XCTAssertTrue(dial.waitForExistence(timeout: 15))
+        XCTAssertEqual(dial.value as? String, "+6.0 mm")
+        dial.tap()
+        let resetRise = app.buttons["Reset Rise to 0"]
+        XCTAssertTrue(resetRise.waitForExistence(timeout: 5), "Tapping the value opens the reset menu")
+        attachScreenshot(of: app, named: "movement-menu")
+        resetRise.tap()
+        XCTAssertEqual(dial.value as? String, "0 mm")
+        app.buttons["Shift"].tap()
+        XCTAssertEqual(dial.value as? String, "+3.0 mm", "Resetting rise leaves shift alone")
+
+        dial.tap()
+        app.buttons["Reset Rise and Shift"].tap()
+        XCTAssertEqual(dial.value as? String, "0 mm")
+    }
+
+    /// Pinching changes the frame size and brings up a chip that puts it back.
+    func testPinchShowsAFrameSizeChip() {
+        let app = XCUIApplication.fresh()
+        app.launch()
+        let image = app.otherElements["viewfinderImage"].firstMatch
+        XCTAssertTrue(image.waitForExistence(timeout: 15))
+        image.pinch(withScale: 0.6, velocity: -1)
+        let chip = app.buttons["zoomChip"]
+        XCTAssertTrue(chip.waitForExistence(timeout: 3), "A pinch shows the frame-size chip")
+        attachScreenshot(of: app, named: "zoom-chip")
+        chip.tap()
+        XCTAssertTrue(chip.waitForNonExistence(timeout: 3), "Tapping the chip returns to the standard size")
+    }
+
+    /// Choosing a lens with a nickname shows the nickname over the image for a moment.
+    func testLensNicknameShowsBriefly() {
+        let app = XCUIApplication.fresh()
+        app.launch()
+        let thirtyTwo = app.buttons["HR Digaron-S 32"]
+        XCTAssertTrue(thirtyTwo.waitForExistence(timeout: 15))
+        thirtyTwo.tap()
+        let notice = app.staticTexts["lensNotice"]
+        XCTAssertTrue(notice.waitForExistence(timeout: 2), "The nickname shows")
+        XCTAssertEqual(notice.label, "HR Digaron-S 32")
+        XCTAssertTrue(notice.waitForNonExistence(timeout: 4), "and fades out")
     }
 
     func testIsoListAndFullStops() {
@@ -196,13 +249,12 @@ final class TechFinderUITests: XCTestCase {
             attachScreenshot(of: app, named: "layout-\(hold)")
 
             var controls: [(String, XCUIElement)] = [
-                ("reset", app.buttons["resetFrameButton"].firstMatch),
                 ("grid", app.buttons["gridButton"].firstMatch),
                 ("movements", app.buttons["movementsButton"].firstMatch),
                 ("settings", app.buttons["settingsButton"].firstMatch),
                 ("lenses", app.buttons["lensButton"].firstMatch),
                 ("frame", app.buttons["formatButton"].firstMatch),
-                ("lens selector", app.segmentedControls.firstMatch),
+                ("lens selector", app.otherElements["lensSelector"].firstMatch),
             ]
             controls += [("ISO", app.otherElements["meter-iso"].firstMatch),
                          ("aperture", app.otherElements["meter-aperture"].firstMatch),
@@ -249,7 +301,7 @@ final class TechFinderUITests: XCTestCase {
                 XCTAssertTrue(first.isSelected, "\(count) lenses")
                 XCTAssertTrue(window.contains(first.frame), "\(count) lenses: \(first.frame)")
             }
-            let row = app.segmentedControls.firstMatch.exists ? app.segmentedControls.firstMatch.frame : selector.frame
+            let row = selector.segmentedControls.firstMatch.exists ? selector.segmentedControls.firstMatch.frame : selector.frame
             XCTAssertTrue(window.insetBy(dx: 15, dy: 0).contains(row), "\(count) lenses: selector \(row) fits")
             XCTAssertFalse(row.intersects(image), "\(count) lenses: selector covers the image")
             XCTAssertEqual(row.midX, window.midX, accuracy: 1, "\(count) lenses: selector is centred")

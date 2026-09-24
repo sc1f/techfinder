@@ -16,6 +16,7 @@ struct LensEditorView: View {
     @State private var focalLengthText: String
     @State private var circleRows: [CircleRow]
     @FocusState private var focusedField: Field?
+    @State private var confirmsDelete = false
 
     /// One image circle figure being edited.
     private struct CircleRow: Identifiable {
@@ -24,8 +25,8 @@ struct LensEditorView: View {
         var fNumber: Double
     }
 
-    /// Apertures manufacturers quote image circles at.
-    private static let quotedApertures: [Double] = [4, 4.5, 5.6, 6.8, 8, 11, 16, 22, 32, 45]
+    /// Apertures manufacturers quote image circles at: the standard whole stops.
+    private static let quotedApertures: [Double] = [2.8, 4, 5.6, 8, 11, 16, 22, 32, 45, 64]
 
     private enum Field { case focalLength, name }
 
@@ -95,10 +96,16 @@ struct LensEditorView: View {
 
             if !item.isNew {
                 Section {
-                    Button("Delete Lens", role: .destructive) {
-                        library.deleteLens(id: item.lens.id)
-                        finish()
-                    }
+                    Button("Delete Lens", role: .destructive) { confirmsDelete = true }
+                        .confirmationDialog("Delete \(item.lens.displayName)?", isPresented: $confirmsDelete,
+                                            titleVisibility: .visible) {
+                            Button("Delete Lens", role: .destructive) {
+                                library.deleteLens(id: item.lens.id)
+                                finish()
+                            }
+                        } message: {
+                            Text("Its image circle figures are deleted too.")
+                        }
                 }
             }
         }
@@ -147,7 +154,9 @@ struct LensEditorView: View {
                         .foregroundStyle(.secondary)
                     Spacer()
                     Picker("Aperture", selection: $row.fNumber) {
-                        ForEach(Self.quotedApertures, id: \.self) { stop in
+                        // A figure saved at another aperture keeps its place in the list.
+                        ForEach(Self.quotedApertures.contains(row.fNumber) ? Self.quotedApertures
+                                    : (Self.quotedApertures + [row.fNumber]).sorted(), id: \.self) { stop in
                             Text("f/\(Millimetres.label(stop))").tag(stop)
                         }
                     }

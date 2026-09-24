@@ -7,6 +7,7 @@ struct ExposureSettingsView: View {
     @Environment(LibraryStore.self) private var library
     @Environment(\.dismiss) private var dismiss
     @Environment(\.closePanel) private var closePanel
+    @State private var confirmsReset = false
 
     var body: some View {
         NavigationStack {
@@ -45,10 +46,14 @@ struct ExposureSettingsView: View {
                 }
 
                 Section {
-                    Button("Reset to Defaults") {
-                        library.exposureLimits = .default
-                        library.movementLimits = .default
-                        library.meterCalibration = 0
+                    Button("Reset to Defaults", role: .destructive) { confirmsReset = true }
+                    .confirmationDialog("Reset the limits, movements and calibration?", isPresented: $confirmsReset,
+                                        titleVisibility: .visible) {
+                        Button("Reset to Defaults", role: .destructive) {
+                            library.exposureLimits = .default
+                            library.movementLimits = .default
+                            library.meterCalibration = 0
+                        }
                     }
                     .disabled(library.exposureLimits == .default && library.movementLimits == .default
                               && library.meterCalibration == 0)

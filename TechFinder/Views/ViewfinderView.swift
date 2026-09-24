@@ -63,6 +63,8 @@ struct ViewfinderView: View {
         var layout: MovementLayout
         var geometry: MovementGeometry
         var imageCircle: ImageCircleModel.Estimate?
+        /// The aperture the image circle is taken at.
+        var aperture: Double
         var focalLength: Double
         /// Room between the furthest corner and the image circle edge, in mm.
         var margin: Double? { imageCircle.map { geometry.margin(movement, imageCircle: $0.diameter) } }
@@ -71,7 +73,7 @@ struct ViewfinderView: View {
 
     var body: some View {
         let solution = self.solution
-        let exposure = ExposureSolver.solve(library.exposure, meteredEV100: camera.meteredEV,
+        let exposure = ExposureSolver.solve(library.exposure, meteredEV100: meteredEV,
                                             compensation: Double(exposureBias))
         let movement = movementInfo(exposure: exposure)
         let zoom = movement?.layout.zoom ?? solution?.zoom ?? 1
@@ -82,13 +84,19 @@ struct ViewfinderView: View {
 
     private func movementInfo(exposure: ExposureSolution) -> MovementInfo? {
         guard movements.isOn, let lens = library.selectedLens else { return nil }
-        let imageCircle = lens.imageCircle(at: ExposureScale.aperture(exposure.apertureIndex))
+        // Plan at the aperture set by hand; if the meter is choosing it, at the lens's reference aperture
+        // instead, so the circle doesn't change as the light does.
+        let setAperture = library.exposure.mode == .aperturePriority
+            ? ExposureScale.aperture(library.exposure.apertureIndex) : nil
+        let aperture = setAperture ?? ImageCircleModel.referenceAperture(lens.imageCircle)
+            ?? ExposureScale.aperture(exposure.apertureIndex)
+        let imageCircle = lens.imageCircle(at: aperture)
         let geometry = MovementGeometry(format: library.selectedFormat, riseAlongLongSide: !orientation.isLandscape)
         let layout = MovementPlanner.layout(format: library.selectedFormat, focalLength: lens.focalLength,
                                             movement: movements.movement, imageCircle: imageCircle?.diameter,
                                             limits: library.movementLimits, turnedLeft: turnedLeft,
                                             optics: camera.optics)
-        return MovementInfo(layout: layout, geometry: geometry, imageCircle: imageCircle,
+        return MovementInfo(layout: layout, geometry: geometry, imageCircle: imageCircle, aperture: aperture,
                             focalLength: lens.focalLength, movement: movements.movement)
     }
 
@@ -99,6 +107,11 @@ struct ViewfinderView: View {
         case .landscapeLeft: true
         case .landscapeRight: false
         }
+    }
+
+    /// The spot meter's reading with the user's calibration applied.
+    private var meteredEV: Double? {
+        camera.meteredEV.map { $0 + library.meterCalibration }
     }
 
     private var exposureSettings: Binding<ExposureSettings> {
@@ -198,7 +211,7 @@ struct ViewfinderView: View {
     private func topBlock(exposure: ExposureSolution, rotation: Angle) -> some View {
         VStack(spacing: 8) {
             MeterBar(settings: exposureSettings, solution: exposure, limits: library.exposureLimits,
-                     hasReading: camera.meteredEV != nil, readingIsClipped: camera.meterIsClipped,
+                     ev100: meteredEV, readingIsClipped: camera.meterIsClipped,
                      step: library.meterStep)
             ToolRow(rotation: rotation, showsGrid: $showsGrid, showsMovements: movementsToggle,
                     canResetFill: abs(fill - Framing.defaultFill) > 0.001,
@@ -213,7 +226,7 @@ struct ViewfinderView: View {
     private func setupBlock(solution: FramingSolution?, movement: MovementInfo?) -> some View {
         if let movement {
             MovementBar(state: $movements, margin: movement.margin,
-                        imageCircleIsEstimate: movement.imageCircle?.isEstimate == true) { delta in
+                        imageCircle: movement.imageCircle.map { ($0.diameter, movement.aperture, $0.isEstimate) }) { delta in
                 move(movements.axis, to: movements.movement[movements.axis] + delta, info: movement)
             }
             .transition(.opacity)
@@ -605,7 +618,8 @@ private struct SetupBar: View {
 
 // MARK: - Tools
 
-/// Tools under the light meter, centred: grid, reset frame size, movements and settings.
+/// Tools under the light meter: reset frame size at the leading edge, grid and movements in the middle,
+/// settings at the trailing edge.
 private struct ToolRow: View {
     let rotation: Angle
     @Binding var showsGrid: Bool
@@ -616,20 +630,24 @@ private struct ToolRow: View {
 
     var body: some View {
         HStack(spacing: 10) {
-            ToolButton(systemImage: "grid", label: "Grid", isOn: showsGrid, rotation: rotation) {
-                showsGrid.toggle()
-            }
-            .accessibilityIdentifier("gridButton")
             ToolButton(systemImage: "arrow.counterclockwise", label: "Reset Frame Size", rotation: rotation) {
                 resetFill()
             }
             .disabled(!canResetFill)
             .accessibilityIdentifier("resetFrameButton")
+
+            Spacer(minLength: 0)
+            ToolButton(systemImage: "grid", label: "Grid", isOn: showsGrid, rotation: rotation) {
+                showsGrid.toggle()
+            }
+            .accessibilityIdentifier("gridButton")
             ToolButton(systemImage: "arrow.up.and.down.and.arrow.left.and.right", label: "Movements",
                        isOn: showsMovements, rotation: rotation) {
                 showsMovements.toggle()
             }
             .accessibilityIdentifier("movementsButton")
+            Spacer(minLength: 0)
+
             ToolButton(systemImage: "slider.horizontal.3", label: "Settings", rotation: rotation) {
                 openSettings()
             }

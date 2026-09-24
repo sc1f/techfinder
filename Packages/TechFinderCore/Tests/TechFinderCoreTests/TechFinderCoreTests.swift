@@ -232,6 +232,30 @@ final class ImageCircleTests: XCTestCase {
         XCTAssertEqual(ImageCircleModel.diameter(points, at: 11)!.diameter, 135, accuracy: 0.5)
     }
 
+    func testSeveralFiguresInterpolateBetweenNeighbours() {
+        let points = [ImageCirclePoint(diameter: 120, fNumber: 5.6), ImageCirclePoint(diameter: 150, fNumber: 22),
+                      ImageCirclePoint(diameter: 140, fNumber: 11)]
+        // f/8 is about halfway (in stops) between f/5.6 and f/11: 120 → 140.
+        XCTAssertEqual(ImageCircleModel.diameter(points, at: 8)!.diameter, 130, accuracy: 1)
+        // f/16 is halfway between f/11 and f/22: 140 → 150.
+        XCTAssertEqual(ImageCircleModel.diameter(points, at: 16)!.diameter, 145, accuracy: 0.5)
+    }
+
+    func testRangeOfFiguresNeverShrinksBelowWideOpen() {
+        // An 80 mm lens: 80 mm circle wide open at f/4, 90 mm at f/11.
+        let points = [ImageCirclePoint(diameter: 80, fNumber: 4), ImageCirclePoint(diameter: 90, fNumber: 11)]
+        XCTAssertEqual(ImageCircleModel.diameter(points, at: 2.8), ImageCircleModel.Estimate(diameter: 80, isEstimate: false))
+        XCTAssertEqual(ImageCircleModel.referenceAperture(points), 11)
+    }
+
+    func testEightyMillimetreExampleAtF11() {
+        // 44 × 33 back (43.8 × 32.9) in a 90 mm circle: 20.0 mm along the long side, 22.9 mm along the short.
+        let format = FormatCatalog.presets.first { $0.id == "digital-44x33" }!
+        let landscape = MovementGeometry(format: format, riseAlongLongSide: false)
+        XCTAssertEqual(landscape.maximum(.shift, other: 0, imageCircle: 90, limits: .unlimited), 20.0, accuracy: 0.05)
+        XCTAssertEqual(landscape.maximum(.rise, other: 0, imageCircle: 90, limits: .unlimited), 22.9, accuracy: 0.05)
+    }
+
     func testNoFiguresMeansUnknown() {
         XCTAssertNil(ImageCircleModel.diameter([], at: 8))
     }

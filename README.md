@@ -16,14 +16,16 @@ A minimal iPhone viewfinder for technical-camera photographers. Choose a lens an
   - The meter reads a 3° spot, drawn as a circle, from the camera's video. It converts the spot's brightness to EV at ISO 100, so a mid-grey spot reads correct.
   - The spot sits at the centre cross (the moved frame's centre with movements on). Tap to move it, and tap it again to return to the centre.
   - Dragging up or down after a tap adds exposure compensation to both the preview and the recommendation.
+  - The ISO pill shows the live reading as EV at ISO 100. To calibrate, meter a grey card with a handheld spot meter and set any consistent difference in Settings › Calibration.
   - A metered value turns orange if most of the spot is clipped white.
 - **Controls.**
-  - Under the meter are the tools: Grid, Reset Frame Size and Settings. Settings sets the ISO, aperture and shutter limits of your equipment; values outside them turn orange.
+  - Under the meter are the tools: Reset Frame Size on the left, Grid and Movements in the middle, Settings on the right. Settings sets the ISO, aperture and shutter limits of your equipment; values outside them turn orange.
   - At the bottom, the lens and format pills sit above the lens selector. Tap either to change it.
   - The lens selector is a glass pill that hugs your lenses. Tap a lens, or drag across it: a clear glass lens lifts, follows your finger, magnifies the numbers beneath it and selects as it passes. The numbers turn in place with the phone without the pill changing size. With more lenses than fit, it becomes a sliding row like the Camera app's mode switcher.
   - Tap the image to focus and meter at that point, then drag up or down to brighten or darken. Tap elsewhere to move the point, or tap the square to return to automatic. The square hides after 3 seconds.
 - **Image circle and movements.**
-  - Give each lens its manufacturer image circle: one or two figures, such as 90 mm at f/11. The circle at the metered aperture is interpolated in stops, or estimated conservatively (marked *) when wider than any figure.
+  - Give each lens its manufacturer image circle at one or more apertures, such as 80 mm at f/4 and 90 mm at f/11. Apertures in between are interpolated in stops. With several figures, the widest counts as wide open. With a single figure, wider apertures are estimated conservatively (marked *).
+  - Movements are planned at the aperture you've set in the meter. If the meter is choosing the aperture, they use the lens's reference aperture (its smallest quoted, usually f/11 or f/22), so the limits don't change with the light. The readout shows the circle in use, such as "IC 90 f/11".
   - Turn on Movements, choose Rise or Shift, and move only that axis: with the arrows, by swiping the value, or by dragging the image. Steps are 0.5 mm.
   - The result view pans and zooms to the moved frame as the photo would look. Overview shows the whole image circle, the unmoved frame (dashed) and the moved frame.
   - Movements stop at the image circle and at the camera's mechanical limits (Settings). The readout shows the millimetres left to the circle's edge, turning orange when close and red if a later aperture change puts a corner outside.

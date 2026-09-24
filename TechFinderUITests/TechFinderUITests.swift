@@ -7,7 +7,7 @@ final class TechFinderUITests: XCTestCase {
     }
 
     func testGridToggleStaysResponsive() {
-        let app = XCUIApplication()
+        let app = XCUIApplication.fresh()
         app.launch()
 
         let grid = app.buttons["gridButton"]
@@ -23,7 +23,7 @@ final class TechFinderUITests: XCTestCase {
     }
 
     func testLensAndFormatButtonsOpenSheets() {
-        let app = XCUIApplication()
+        let app = XCUIApplication.fresh()
         app.launch()
 
         let lensButton = app.buttons["lensButton"]
@@ -41,7 +41,7 @@ final class TechFinderUITests: XCTestCase {
     }
 
     func testMeterAndSettings() {
-        let app = XCUIApplication()
+        let app = XCUIApplication.fresh()
         app.launch()
 
         let shutter = app.otherElements["meter-shutter"].firstMatch
@@ -61,8 +61,8 @@ final class TechFinderUITests: XCTestCase {
     /// A 90 mm image circle at f/11 on the 50 mm lens and a 53.4 × 40 back, upright: rise stops where the
     /// top corners meet the circle, and each axis moves on its own.
     func testMovementsStopAtTheImageCircle() {
-        let app = XCUIApplication()
-        app.launchArguments = ["-TFImageCircle", "90", "-TFMovements", "YES", "-TFRise", "0", "-TFShift", "0",
+        let app = XCUIApplication.fresh()
+        app.launchArguments += ["-TFImageCircle", "90", "-TFMovements", "YES", "-TFRise", "0", "-TFShift", "0",
                                "-TFOverview", "NO"]
         app.launch()
 
@@ -97,8 +97,8 @@ final class TechFinderUITests: XCTestCase {
     }
 
     func testDraggingTheImageMovesTheChosenAxis() {
-        let app = XCUIApplication()
-        app.launchArguments = ["-TFImageCircle", "90", "-TFMovements", "YES", "-TFRise", "0", "-TFShift", "0",
+        let app = XCUIApplication.fresh()
+        app.launchArguments += ["-TFImageCircle", "90", "-TFMovements", "YES", "-TFRise", "0", "-TFShift", "0",
                                "-TFOverview", "NO"]
         app.launch()
 
@@ -114,7 +114,7 @@ final class TechFinderUITests: XCTestCase {
     }
 
     func testLensSelectorTapAndDrag() {
-        let app = XCUIApplication()
+        let app = XCUIApplication.fresh()
         app.launch()
 
         let lensButton = app.buttons["lensButton"]
@@ -132,8 +132,8 @@ final class TechFinderUITests: XCTestCase {
     }
 
     func testAddingALensWithAnImageCircle() {
-        let app = XCUIApplication()
-        app.launchArguments = ["-TFPresent", "newLens"]
+        let app = XCUIApplication.fresh()
+        app.launchArguments += ["-TFPresent", "newLens"]
         app.launch()
 
         let focalLength = app.textFields["50"]
@@ -147,6 +147,11 @@ final class TechFinderUITests: XCTestCase {
         diameter.tap()
         diameter.typeText("158")
         XCTAssertTrue(app.staticTexts["Rise or Fall"].waitForExistence(timeout: 5), "Coverage is shown once a figure is entered")
+        // Any number of apertures can be added.
+        app.buttons["Add Another Aperture"].tap()
+        app.buttons["Add Another Aperture"].tap()
+        XCTAssertEqual(app.textFields.matching(identifier: "90").count + app.textFields.matching(NSPredicate(format: "placeholderValue == '90'")).count > 0, true)
+        XCTAssertTrue(app.buttons["Add Another Aperture"].exists, "More apertures can still be added")
         attachScreenshot(of: app, named: "lens-image-circle")
         app.buttons["Save"].tap()
 
@@ -162,5 +167,14 @@ final class TechFinderUITests: XCTestCase {
         attachment.name = name
         attachment.lifetime = .keepAlways
         add(attachment)
+    }
+}
+
+extension XCUIApplication {
+    /// The app with an in-memory starter library, so tests don't depend on each other's saved lenses.
+    static func fresh() -> XCUIApplication {
+        let app = XCUIApplication()
+        app.launchArguments = ["-TFFreshLibrary", "YES"]
+        return app
     }
 }

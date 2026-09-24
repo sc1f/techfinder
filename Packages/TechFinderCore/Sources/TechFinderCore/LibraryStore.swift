@@ -17,6 +17,8 @@ public final class LibraryStore {
     public var movementLimits: MovementLimits = .default { didSet { save() } }
     /// How far the meter's arrows and swipes move, in thirds of a stop: 3 for full stops, 1 for thirds.
     public var meterStep: Int = 3 { didSet { save() } }
+    /// Added to every meter reading, in EV, to match a reference meter.
+    public var meterCalibration: Double = 0 { didSet { save() } }
 
     @ObservationIgnored private let fileURL: URL?
 
@@ -35,6 +37,7 @@ public final class LibraryStore {
             exposureLimits = snapshot.exposureLimits ?? .default
             movementLimits = snapshot.movementLimits ?? .default
             meterStep = snapshot.meterStep ?? 3
+            meterCalibration = snapshot.meterCalibration ?? 0
         } else {
             lenses = FormatCatalog.starterLenses.sorted(by: Self.lensOrder)
             selectedLensID = lenses.first(where: { $0.focalLength == 50 })?.id ?? lenses.first?.id
@@ -123,6 +126,7 @@ public final class LibraryStore {
         var exposureLimits: ExposureLimits?
         var movementLimits: MovementLimits?
         var meterStep: Int?
+        var meterCalibration: Double?
     }
 
     private static func lensOrder(_ a: Lens, _ b: Lens) -> Bool {
@@ -144,7 +148,8 @@ public final class LibraryStore {
         let snapshot = Snapshot(lenses: lenses, customFormats: customFormats,
                                 selectedLensID: selectedLensID, selectedFormatID: selectedFormatID,
                                 exposure: exposure, exposureLimits: exposureLimits,
-                                movementLimits: movementLimits, meterStep: meterStep)
+                                movementLimits: movementLimits, meterStep: meterStep,
+                                meterCalibration: meterCalibration)
         do {
             let data = try JSONEncoder().encode(snapshot)
             try data.write(to: fileURL, options: .atomic)

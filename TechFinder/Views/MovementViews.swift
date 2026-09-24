@@ -168,7 +168,8 @@ struct MovementBar: View {
     @Binding var state: MovementState
     /// Room to the image circle edge in mm, if the lens's image circle is known.
     let margin: Double?
-    let imageCircleIsEstimate: Bool
+    /// The image circle in use: diameter, the aperture it's taken at, and whether it's an estimate.
+    let imageCircle: (diameter: Double, aperture: Double, isEstimate: Bool)?
     /// Moves the chosen axis by a number of millimetres, stopping at the limits.
     let step: (Double) -> Void
 
@@ -195,9 +196,10 @@ struct MovementBar: View {
     }
 
     private var caption: String {
-        guard let margin else { return "No image circle" }
-        if margin < 0 { return "Outside circle" }
-        return "\(Millimetres.label(margin)) mm to edge\(imageCircleIsEstimate ? "*" : "")"
+        guard let margin, let imageCircle else { return "No image circle" }
+        let circle = "IC \(Millimetres.label(imageCircle.diameter))\(imageCircle.isEstimate ? "*" : "") f/\(Millimetres.label(imageCircle.aperture))"
+        if margin < 0 { return "\(circle) · outside" }
+        return "\(circle) · \(Millimetres.label(margin)) to edge"
     }
 
     private var captionColor: Color {

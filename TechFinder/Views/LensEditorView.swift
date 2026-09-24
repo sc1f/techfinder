@@ -39,6 +39,13 @@ struct LensEditorView: View {
         })
     }
 
+    /// A sensible aperture for a new row: f/11 first, then the widest quoted aperture not yet used.
+    private var nextAperture: Double {
+        let used = Set(circleRows.map(\.fNumber))
+        if !used.contains(11) { return 11 }
+        return Self.quotedApertures.first { !used.contains($0) } ?? 22
+    }
+
     /// The valid image circle figures entered so far.
     private var imageCircle: [ImageCirclePoint] {
         circleRows.compactMap { row in
@@ -95,6 +102,8 @@ struct LensEditorView: View {
                 }
             }
         }
+        .scrollDismissesKeyboard(.interactively)
+        .keyboardDoneButton()
         .navigationTitle(item.isNew ? "New Lens" : "Edit Lens")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
@@ -147,10 +156,8 @@ struct LensEditorView: View {
             }
             .onDelete { circleRows.remove(atOffsets: $0) }
 
-            if circleRows.count < 2 {
-                Button(circleRows.isEmpty ? "Add Image Circle" : "Add Another Aperture") {
-                    circleRows.append(CircleRow(diameterText: "", fNumber: circleRows.isEmpty ? 11 : 5.6))
-                }
+            Button(circleRows.isEmpty ? "Add Image Circle" : "Add Another Aperture") {
+                circleRows.append(CircleRow(diameterText: "", fNumber: nextAperture))
             }
 
             if let largest = imageCircle.max(by: { $0.fNumber < $1.fNumber }) {
@@ -163,7 +170,7 @@ struct LensEditorView: View {
         } header: {
             Text("Image Circle")
         } footer: {
-            Text("From the lens data sheet: Rodenstock quotes f/11, Schneider and most large-format lenses f/22. Add a second figure, such as wide open, to follow how coverage changes with aperture. Movements shown are for \(format.name) held upright, at the smallest quoted aperture.")
+            Text("From the lens data sheet: Rodenstock quotes f/11, Schneider and most large-format lenses f/22. Add figures at more apertures, such as wide open, to follow how coverage changes; apertures in between are interpolated in stops. Movements shown are for \(format.name) held upright, at the smallest quoted aperture.")
         }
         .monospacedDigit()
     }

@@ -11,7 +11,8 @@ struct MeterBar: View {
     @Binding var settings: ExposureSettings
     let solution: ExposureSolution
     let limits: ExposureLimits
-    let hasReading: Bool
+    /// The calibrated spot reading at ISO 100, or nil before the first reading.
+    let ev100: Double?
     /// Most of the metered spot is clipped white, so the metered value is only a bound.
     let readingIsClipped: Bool
     /// Thirds of a stop per step.
@@ -21,7 +22,8 @@ struct MeterBar: View {
 
     var body: some View {
         HStack(spacing: 8) {
-            dial(.iso, caption: "ISO")
+            // The raw reading, for comparing with a handheld meter.
+            dial(.iso, caption: ev100.map { String(format: "ISO · EV %.1f", $0) } ?? "ISO")
             dial(.aperture, caption: "Aperture")
             dial(.shutter, caption: "Shutter")
         }
@@ -38,7 +40,7 @@ struct MeterBar: View {
         return MeterDial(
             caption: caption,
             // The metered value is unknown until the first light reading.
-            value: isMetered && !hasReading ? "—" : solution.label(axis),
+            value: isMetered && ev100 == nil ? "—" : solution.label(axis),
             badge: badge,
             isWarning: solution.isOutsideLimits(axis, limits) || (isMetered && readingIsClipped),
             canLower: direction > 0 ? index > range.lowerBound : index < range.upperBound,

@@ -162,6 +162,8 @@ struct FormatEditorView: View {
                 }
             }
         }
+        .scrollDismissesKeyboard(.interactively)
+        .keyboardDoneButton()
         .navigationTitle(item.isNew ? "New Format" : "Edit Format")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {

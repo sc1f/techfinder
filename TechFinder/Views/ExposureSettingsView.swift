@@ -16,10 +16,16 @@ struct ExposureSettingsView: View {
                         Text("Full Stop").tag(3)
                         Text("⅓ Stop").tag(1)
                     }
+                    Stepper(value: Binding(get: { library.meterCalibration },
+                                           set: { library.meterCalibration = ($0 * 10).rounded() / 10 }),
+                            in: -3...3, step: 0.1) {
+                        LabeledContent("Calibration", value: String(format: "%+.1f EV", library.meterCalibration))
+                    }
+                    .monospacedDigit()
                 } header: {
                     Text("Light Meter")
                 } footer: {
-                    Text("How far each arrow tap or swipe moves ISO, aperture and shutter. Metered values are always shown to the nearest ⅓ stop.")
+                    Text("Steps: how far each arrow tap or swipe moves ISO, aperture and shutter. Calibration: compare the EV shown by ISO with a handheld spot meter on a grey card; if the app reads consistently high or low, offset it here.")
                 }
 
                 limitSection(.iso, title: "ISO", lower: "Lowest", upper: "Highest",
@@ -42,8 +48,10 @@ struct ExposureSettingsView: View {
                     Button("Reset to Defaults") {
                         library.exposureLimits = .default
                         library.movementLimits = .default
+                        library.meterCalibration = 0
                     }
-                    .disabled(library.exposureLimits == .default && library.movementLimits == .default)
+                    .disabled(library.exposureLimits == .default && library.movementLimits == .default
+                              && library.meterCalibration == 0)
                 } footer: {
                     Text("Meter values outside these limits turn orange.")
                 }

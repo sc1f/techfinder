@@ -19,7 +19,8 @@ public struct ImageCirclePoint: Codable, Hashable, Sendable {
 ///
 /// Coverage grows as the lens is stopped down (less mechanical vignetting) by an amount that depends on
 /// the design, so there is no general formula:
-/// - Two or more figures are interpolated in stops, and held at the nearest figure beyond them.
+/// - Two or more figures are interpolated in stops, and held at the nearest figure beyond them. The
+///   widest is taken as wide open, so the circle never shrinks below it.
 /// - One figure is used as-is at that aperture and smaller ones; at wider apertures it shrinks by
 ///   `shrinkPerStop` per stop, marked as an estimate.
 public enum ImageCircleModel {
@@ -34,11 +35,21 @@ public enum ImageCircleModel {
         public var isEstimate: Bool
     }
 
+    /// The aperture to plan movements at when the photographer hasn't set one: the smallest quoted
+    /// aperture, which is usually the working aperture the figure is quoted for (f/11 or f/22).
+    public static func referenceAperture(_ points: [ImageCirclePoint]) -> Double? {
+        points.filter { $0.diameter > 0 && $0.fNumber > 0 }.map(\.fNumber).max()
+    }
+
     public static func diameter(_ points: [ImageCirclePoint], at fNumber: Double) -> Estimate? {
         let points = points.filter { $0.diameter > 0 && $0.fNumber > 0 }.sorted { $0.fNumber < $1.fNumber }
         guard let widest = points.first, let smallest = points.last, fNumber > 0 else { return nil }
 
         if fNumber < widest.fNumber {
+            // With a range of figures the widest is the lens wide open: it can't open further.
+            if points.count > 1 {
+                return Estimate(diameter: widest.diameter, isEstimate: false)
+            }
             let stops = 2 * log2(widest.fNumber / fNumber)
             let share = max(1 - shrinkPerStop * stops, smallestShare)
             return Estimate(diameter: widest.diameter * share, isEstimate: true)

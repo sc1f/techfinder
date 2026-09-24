@@ -2,8 +2,8 @@ import SwiftUI
 import TechFinderCore
 
 /// The main screen: the live camera image with the taking frame, the menu and setup buttons on top, and
-/// the lens carousel below. Tap the image to focus and meter there; pinch to show more or less of the
-/// scene around the frame.
+/// the lens selector below. Pinch to show more or less of the scene around the frame; with movements on,
+/// drag to move and double-tap to return the current movement to zero.
 struct ViewfinderView: View {
     @Environment(LibraryStore.self) private var library
     @Environment(\.scenePhase) private var scenePhase
@@ -13,11 +13,6 @@ struct ViewfinderView: View {
     @State private var sheet: Sheet?
     /// Shown as a rotated card in landscape, where system sheets would appear sideways.
     @State private var panel: Sheet?
-    @State private var focusMarker: FocusMarker?
-    /// A tapped metering spot; nil meters the centre cross (or the moved frame's centre).
-    /// Exposure compensation in stops for the current focus point, set by dragging after a tap.
-    /// Bumped by every touch on the image; the focus square hides after 3 s without one.
-    @State private var focusActivity = 0
     @AppStorage("frameFill") private var fill = Framing.defaultFill
     @AppStorage("showsGrid") private var showsGrid = false
     @State private var pinchStartFill: Double?
@@ -29,11 +24,6 @@ struct ViewfinderView: View {
     enum Sheet: String, Identifiable {
         case lenses, formats, newLens, settings
         var id: String { rawValue }
-    }
-
-    private struct FocusMarker: Equatable {
-        let id = UUID()
-        let location: CGPoint
     }
 
     /// The spot meter's angle of view.
@@ -154,18 +144,12 @@ struct ViewfinderView: View {
                     .onChange(of: spot.region, initial: true) { _, region in
                         camera.setSpot(region)
                     }
-                if let focusMarker {
-                    FocusSquare()
-                        .position(focusMarker.location)
-                        .id(focusMarker.id)
-                        .transition(.opacity)
-                }
             }
             .frame(width: imageRect.width, height: imageRect.height)
             .clipped()
             .contentShape(Rectangle())
-            .onTapGesture { location in
-                focus(at: location, in: imageRect.size, transform: transform)
+            .onTapGesture(count: 2) {
+                if let movement { move(movements.axis, to: 0, info: movement) }
             }
             .gesture(imageDrag(movement: movement, mapping: mapping))
             .position(x: imageRect.midX, y: imageRect.midY)
@@ -250,15 +234,6 @@ struct ViewfinderView: View {
             .persistentSystemOverlays(.hidden)
             .onChange(of: zoom, initial: true) { _, zoom in
                 camera.setZoom(zoom)
-                // The camera returns to automatic focus and exposure, metered at the centre, for a new framing.
-                focusMarker = nil
-            }
-            .task(id: focusActivity) {
-                // Hide the focus square after 3 s without a touch; the point stays active.
-                guard focusMarker != nil else { return }
-                try? await Task.sleep(for: .seconds(3))
-                guard !Task.isCancelled else { return }
-                withAnimation(.easeOut(duration: 0.4)) { focusMarker = nil }
             }
             .task {
                 await camera.start()
@@ -434,27 +409,6 @@ struct ViewfinderView: View {
         return (location, screenRadius, SpotMeter.Region(center: CGPoint(x: v, y: 1 - u), radius: radius))
     }
 
-    /// Focuses at a tap on the upright preview. Tapping the focus square again returns to autofocus at
-    /// the centre. Metering stays on the spot at the centre cross.
-    private func focus(at location: CGPoint, in size: CGSize, transform: (scale: CGFloat, offset: CGSize)) {
-        guard size.width > 0, size.height > 0 else { return }
-        if let focusMarker, hypot(focusMarker.location.x - location.x, focusMarker.location.y - location.y) < 40 {
-            camera.resetFocus()
-            withAnimation(.smooth(duration: 0.2)) { self.focusMarker = nil }
-            return
-        }
-        focusActivity += 1
-        // Undo the movement view's magnification to find the point on the camera image.
-        let image = CGPoint(x: size.width / 2 + (location.x - size.width / 2 - transform.offset.width) / transform.scale,
-                            y: size.height / 2 + (location.y - size.height / 2 - transform.offset.height) / transform.scale)
-        // The preview is the landscape sensor image turned 90° clockwise.
-        let devicePoint = CGPoint(x: min(max(image.y / size.height, 0), 1), y: min(max(1 - image.x / size.width, 0), 1))
-        camera.focus(at: devicePoint)
-        withAnimation(.smooth(duration: 0.2)) {
-            focusMarker = FocusMarker(location: location)
-        }
-    }
-
     /// Dragging on the image with movements on moves the chosen axis only: in the overview the frame
     /// follows the finger; in the result view the scene does, like panning a photo.
     private func imageDrag(movement: MovementInfo?, mapping: MovementMapping?) -> some Gesture {
@@ -505,23 +459,6 @@ struct ViewfinderView: View {
         default:
             EmptyView()
         }
-    }
-}
-
-/// Camera-app style focus square: settles into place where the user tapped. The viewfinder hides it
-/// after 3 s idle.
-private struct FocusSquare: View {
-    @State private var settled = false
-
-    var body: some View {
-        Rectangle()
-            .stroke(Color.accentColor, lineWidth: 1.5)
-            .frame(width: 72, height: 72)
-            .scaleEffect(settled ? 1 : 1.35)
-            .allowsHitTesting(false)
-            .onAppear {
-                withAnimation(.smooth(duration: 0.25)) { settled = true }
-            }
     }
 }
 

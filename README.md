@@ -6,7 +6,7 @@ A minimal iPhone viewfinder for technical-camera photographers. Choose a lens an
 
 ## Features (MVP)
 
-- **Live framing.** The phone camera zooms so the taking frame fills about 85% of the view, and the scene around it is darkened. Pinch to show more or less of the surroundings. Tap the image to focus there. An optional rule-of-thirds grid sits inside the frame.
+- **Live framing.** The phone camera zooms so the taking frame fills about 85% of the view, and the scene around it is darkened. Pinch to show more or less of the surroundings. The camera autofocuses at the centre. An optional rule-of-thirds grid sits inside the frame.
 - **Lens library.** Add, edit and delete lenses (focal length plus optional name). The list is sorted wide to long, and the angles of view shown are for the current format.
 - **Formats.** Digital backs are grouped by sensor size with their models listed (53.4 × 40, 53.7 × 40.4, 44 × 33, 45 × 30, 36 × 24). Film covers medium format (6×4.5 to 6×17) and large format (4×5, 5×7, 8×10). You can add custom formats.
 - **Light meter.**
@@ -21,12 +21,11 @@ A minimal iPhone viewfinder for technical-camera photographers. Choose a lens an
 - **Controls.**
   - Under the meter are the tools: Reset Frame Size on the left, Grid and Movements in the middle, Settings on the right. Settings sets the ISO, aperture and shutter limits of your equipment; values outside them turn orange.
   - At the bottom, the lens and format pills sit above the lens selector. Tap either to change it.
-  - The lens selector is a glass pill that hugs your lenses. Tap a lens, or drag across it: a clear glass lens lifts, follows your finger, magnifies the numbers beneath it and selects as it passes. The numbers turn in place with the phone without the pill changing size. With more lenses than fit, it becomes a sliding row like the Camera app's mode switcher.
-  - Tap the image to focus there. Tap the square again to return to autofocus at the centre. The square hides after 3 seconds.
+  - The lens selector is the system segmented control. On iOS 26, pressing or dragging lifts a clear glass lens that magnifies the lenses beneath it, as in the Photos app. The numbers turn with the phone without the control changing size. With more lenses than fit, it becomes a sliding row like the Camera app's mode switcher.
 - **Image circle and movements.**
   - Give each lens its manufacturer image circle at one or more apertures, such as 80 mm at f/4 and 90 mm at f/11.
   - Movements use the figure quoted at the aperture closest (in stops) to the meter's, so only your real data sheet figures are used. On a tie the wider aperture's smaller circle wins. The readout shows the figure in use, such as "IC 90 f/11".
-  - Turn on Movements, choose Rise or Shift, and move only that axis: with the arrows, by swiping the value, or by dragging the image. Steps are 0.5 mm.
+  - Turn on Movements, choose Rise or Shift, and move only that axis: with the arrows, by swiping the value, or by dragging the image. Steps are 0.5 mm. Double-tap the image to return the current axis to zero.
   - The result view pans and zooms to the moved frame as the photo would look. Overview shows the whole image circle, the unmoved frame (dashed) and the moved frame.
   - Movements stop at the image circle and at the camera's mechanical limits (Settings). The readout shows the millimetres left to the circle's edge, turning orange when close and red if a later aperture change puts a corner outside.
 - **Landscape.** Hold the phone sideways and the meter and tools move to the viewer's top edge, and the lens and format pills to the bottom edge. The lens labels turn, and sheets open as rotated glass cards.

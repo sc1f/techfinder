@@ -99,23 +99,6 @@ final class CameraController: @unchecked Sendable {
         }
     }
 
-    /// Keeps focusing at a point, in device coordinates ((0,0) top-left of the landscape sensor image),
-    /// until another point is chosen, the lens changes or `resetFocus()`.
-    func focus(at devicePoint: CGPoint) {
-        queue.async { [self] in
-            guard let device else { return }
-            setFocus(on: device, at: devicePoint)
-        }
-    }
-
-    /// Returns to continuous autofocus at the centre of the image.
-    func resetFocus() {
-        queue.async { [self] in
-            guard let device else { return }
-            setFocus(on: device, at: CGPoint(x: 0.5, y: 0.5))
-        }
-    }
-
     // MARK: - Configuration (session queue)
 
     private func applyRequestedZoom() {
@@ -136,7 +119,7 @@ final class CameraController: @unchecked Sendable {
             // Zoom is best effort: the frame is still computed from the requested factor.
         }
         if isNewFraming {
-            // A chosen focus point belongs to the previous framing.
+            // Continuous autofocus at the centre of the new framing.
             setFocus(on: device, at: CGPoint(x: 0.5, y: 0.5))
         }
     }

@@ -111,6 +111,10 @@ final class TechFinderUITests: XCTestCase {
         start.press(forDuration: 0.05, thenDragTo: end)
         let value = dial.value as? String ?? ""
         XCTAssertTrue(value.hasPrefix("+"), "Dragging down should rise, got \(value)")
+
+        // Double-tapping the image returns the current movement to zero.
+        window.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.4)).doubleTap()
+        XCTAssertEqual(dial.value as? String, "0 mm", "Double-tap resets the rise")
     }
 
     func testIsoListAndFullStops() {

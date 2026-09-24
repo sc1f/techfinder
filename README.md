@@ -11,7 +11,7 @@ A minimal iPhone viewfinder for technical-camera photographers. Choose a lens an
 - **Formats.** Digital backs are grouped by sensor size with their models listed (53.4 × 40, 53.7 × 40.4, 44 × 33, 45 × 30, 36 × 24). Film covers medium format (6×4.5 to 6×17) and large format (4×5, 5×7, 8×10). You can add custom formats.
 - **Light meter.**
   - The meter row shows ISO, aperture and shutter. Tap an arrow or swipe along a value to change it. Right raises the value (higher ISO, higher f-number, faster shutter); left lowers it.
-  - Steps are full stops by default, landing on the standard series (ISO 100, 200, 400…; f/5.6, 8, 11…; 1/125, 1/250…), or ⅓ stop in Settings.
+  - Steps are full stops by default, landing on the standard series (ISO 100, 200, 400…; f/5.6, 8, 11…; 1/125, 1/250…), or ⅓ stop in Settings. The limit pickers in Settings follow the same steps; switching to full stops moves each limit to its nearest whole stop (f/1.1 becomes f/1).
   - Tap ISO, aperture or shutter for a list of values within your limits: whole stops (1/30, 1/60, 1/125…; f/5.6, 8, 11…), or thirds with ⅓-stop steps. Picking the metered value sets it by hand.
   - ISO is always set by hand, and so is either the aperture or the shutter (lock icon). The meter gives the other (A). Pick the metered value from its list, or change it, to set it by hand instead.
 - **Spot meter.**

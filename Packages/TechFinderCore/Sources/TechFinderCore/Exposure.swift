@@ -82,8 +82,23 @@ public enum ExposureScale {
 
     /// Whether an index is on the standard full-stop series.
     public static func isFullStop(_ index: Int, axis: ExposureAxis) -> Bool {
-        let anchor = axis == .iso ? iso100 : (axis == .shutter ? oneSecond : 0)
-        return (index - anchor) % 3 == 0
+        (index - fullStopAnchor(axis)) % 3 == 0
+    }
+
+    /// The whole stop nearest `index` on the scale (f/1.1 → f/1, 1/80 → 1/60, ISO 160 → 200).
+    public static func nearestFullStop(_ index: Int, axis: ExposureAxis) -> Int {
+        let anchor = fullStopAnchor(axis)
+        let range = range(axis)
+        var nearest = anchor + 3 * Int((Double(index - anchor) / 3).rounded())
+        // Stay on the scale, on a whole stop.
+        while nearest < range.lowerBound { nearest += 3 }
+        while nearest > range.upperBound { nearest -= 3 }
+        return nearest
+    }
+
+    /// Whole stops are counted from ISO 100, f/1 and 1 s.
+    private static func fullStopAnchor(_ axis: ExposureAxis) -> Int {
+        axis == .iso ? iso100 : (axis == .shutter ? oneSecond : 0)
     }
 
     public static func label(_ axis: ExposureAxis, _ index: Int) -> String {
@@ -201,6 +216,18 @@ public struct ExposureLimits: Codable, Equatable, Sendable {
         case .aperture: aperture
         case .shutter: shutter
         }
+    }
+
+    /// Each limit moved to its nearest whole stop, for when the meter changes to full-stop steps.
+    public func snappedToFullStops() -> ExposureLimits {
+        var limits = self
+        for axis in [ExposureAxis.iso, .aperture, .shutter] {
+            let range = self.range(axis)
+            let lower = ExposureScale.nearestFullStop(range.lowerBound, axis: axis)
+            let upper = ExposureScale.nearestFullStop(range.upperBound, axis: axis)
+            limits.setRange(axis, lower...max(lower, upper))
+        }
+        return limits
     }
 
     public mutating func setRange(_ axis: ExposureAxis, _ range: ClosedRange<Int>) {

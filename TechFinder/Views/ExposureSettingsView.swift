@@ -33,7 +33,7 @@ struct ExposureSettingsView: View {
                 limitSection(.aperture, title: "Aperture", lower: "Widest", upper: "Smallest",
                              footer: "The apertures your lenses offer.")
                 limitSection(.shutter, title: "Shutter", lower: "Fastest", upper: "Slowest",
-                             footer: "Leaf shutters usually top out at 1/500 s.")
+                             footer: "The shutter speeds your camera and lenses offer.")
 
                 Section {
                     movementStepper(.rise, title: "Rise/Fall")
@@ -52,8 +52,6 @@ struct ExposureSettingsView: View {
                     }
                     .disabled(library.exposureLimits == .default && library.movementLimits == .default
                               && library.meterCalibration == 0)
-                } footer: {
-                    Text("Meter values outside these limits turn orange.")
                 }
             }
             .navigationTitle("Settings")
@@ -70,6 +68,7 @@ struct ExposureSettingsView: View {
         if let closePanel { closePanel() } else { dismiss() }
     }
 
+    /// Lowest and highest limits for one axis, listing whole stops or thirds to match the meter's steps.
     private func limitSection(_ axis: ExposureAxis, title: String, lower: String, upper: String,
                               footer: String) -> some View {
         let range = library.exposureLimits.range(axis)
@@ -77,22 +76,28 @@ struct ExposureSettingsView: View {
 
         return Section {
             Picker(lower, selection: bound(axis, lower: true)) {
-                ForEach(all.lowerBound...range.upperBound, id: \.self) { index in
+                ForEach(choices(axis, all.lowerBound...range.upperBound, current: range.lowerBound), id: \.self) { index in
                     Text(ExposureScale.label(axis, index)).tag(index)
                 }
             }
             Picker(upper, selection: bound(axis, lower: false)) {
-                ForEach(range.lowerBound...all.upperBound, id: \.self) { index in
+                ForEach(choices(axis, range.lowerBound...all.upperBound, current: range.upperBound), id: \.self) { index in
                     Text(ExposureScale.label(axis, index)).tag(index)
                 }
             }
         } header: {
             Text(title)
         } footer: {
-            Text(footer)
+            Text("\(footer) Metered values outside these limits turn orange.")
         }
         .pickerStyle(.menu)
         .monospacedDigit()
+    }
+
+    /// The scale values in `range` a limit can take: whole stops with full-stop steps, else thirds.
+    /// The current value is always included so the picker shows it.
+    private func choices(_ axis: ExposureAxis, _ range: ClosedRange<Int>, current: Int) -> [Int] {
+        range.filter { $0 == current || library.meterStep == 1 || ExposureScale.isFullStop($0, axis: axis) }
     }
 
     private func movementStepper(_ axis: MovementAxis, title: String) -> some View {

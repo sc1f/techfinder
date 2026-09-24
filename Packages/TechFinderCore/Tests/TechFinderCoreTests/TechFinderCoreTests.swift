@@ -198,6 +198,25 @@ final class ExposureTests: XCTestCase {
         XCTAssertEqual(ExposureScale.label(.aperture, settings.apertureIndex), "f/18")
     }
 
+    func testChangingToWholeStopsSnapsTheLimits() {
+        let store = LibraryStore(fileURL: nil)
+        store.meterStep = 1
+        // f/1.1 to f/20, 1/80 s to 1/3 s, ISO 64 to 2500 in thirds.
+        store.exposureLimits = ExposureLimits(iso: 10...26, aperture: 1...26, shutter: 20...34)
+        store.meterStep = 3
+        let limits = store.exposureLimits
+        XCTAssertEqual(ExposureScale.label(.aperture, limits.aperture.lowerBound), "f/1")
+        XCTAssertEqual(ExposureScale.label(.aperture, limits.aperture.upperBound), "f/22")
+        XCTAssertEqual(ExposureScale.label(.shutter, limits.shutter.lowerBound), "1/60")
+        XCTAssertEqual(ExposureScale.label(.shutter, limits.shutter.upperBound), "1/4")
+        XCTAssertEqual(ExposureScale.label(.iso, limits.iso.lowerBound), "50")
+        XCTAssertEqual(ExposureScale.label(.iso, limits.iso.upperBound), "3200")
+        for axis in [ExposureAxis.iso, .aperture, .shutter] {
+            XCTAssertTrue(ExposureScale.isFullStop(limits.range(axis).lowerBound, axis: axis))
+            XCTAssertTrue(ExposureScale.isFullStop(limits.range(axis).upperBound, axis: axis))
+        }
+    }
+
     func testFullStopsLandOnTheStandardSeries() {
         func step(_ axis: ExposureAxis, _ label: String, _ steps: Int) -> String {
             ExposureScale.label(axis, ExposureScale.stepped(index(axis, label), by: steps, thirdsPerStep: 3, axis: axis))

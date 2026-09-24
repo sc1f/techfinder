@@ -16,7 +16,16 @@ public final class LibraryStore {
     /// The camera's mechanical rise/fall and shift range.
     public var movementLimits: MovementLimits = .default { didSet { save() } }
     /// How far the meter's arrows and swipes move, in thirds of a stop: 3 for full stops, 1 for thirds.
-    public var meterStep: Int = 3 { didSet { save() } }
+    /// Thirds of a stop per meter step: 3 (whole stops) or 1. Changing to whole stops moves the
+    /// equipment limits to their nearest whole stops, so they stay on the values the pickers list.
+    public var meterStep: Int = 3 {
+        didSet {
+            if meterStep == 3, oldValue != 3 {
+                exposureLimits = exposureLimits.snappedToFullStops()
+            }
+            save()
+        }
+    }
     /// Added to every meter reading, in EV, to match a reference meter.
     public var meterCalibration: Double = 0 { didSet { save() } }
 

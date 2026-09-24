@@ -62,7 +62,7 @@ Packages/TechFinderCore/     models, format catalog, framing math, persistence, 
 
 `.github/workflows/ios.yml` runs on a macOS 26 runner with the latest stable Xcode.
 
-- **Every push and pull request:** builds and runs the unit tests and the UI tests (which toggle the grid, use the meter, open the sheets and check that no control covers the camera image) on an iPhone Simulator. A parallel job runs `scripts/device-matrix.sh`: the layout test and takes screenshots on an iPhone SE, 13 mini, 16 Pro and 16 Pro Max (the `device-screenshots` artifact); run it locally the same way. It then launches the app in four states (portrait, the Lenses sheet, and both landscape holds) and fails if the app is stuck at full CPU. Screenshots of each state are saved as the `screenshots` artifact.
+- **Every push and pull request:** builds and runs the unit tests and the UI tests (which toggle the grid, use the meter, open the sheets and check that no control covers the camera image) on an iPhone Simulator. It then launches the app in six states (portrait, the Lenses sheet, both landscape holds, and the two movement views) and fails if the app is stuck at full CPU; screenshots of each state are saved as the `screenshots` artifact. A parallel job runs `scripts/device-matrix.sh`, which runs the layout test and takes screenshots on an iPhone SE, 13 mini, 16 Pro and 16 Pro Max (the `device-screenshots` artifact). Run the script locally the same way.
 - **TestFlight:** runs from *Actions › iOS › Run workflow*, or when you push a tag such as `v0.1.0`. It archives, signs, and uploads to TestFlight. The build number is the workflow run number.
 
 - **Unsigned iPhone build:** every push to `main` also saves an unsigned build of the app, made with the latest Xcode.

@@ -32,8 +32,8 @@ struct ControlBar: View {
     }
 }
 
-/// The system segmented control on a glass capsule, like the Photos app's bottom bar. On iOS 26 the
-/// selection lifts into a clear glass lens while pressed or dragged.
+/// The system segmented control. On iOS 26 the selection lifts into a clear glass lens while pressed
+/// or dragged, like the Photos app's bottom bar.
 private struct NativeLensPicker: View {
     @Environment(LibraryStore.self) private var library
     let rotation: Angle
@@ -53,8 +53,6 @@ private struct NativeLensPicker: View {
         .pickerStyle(.segmented)
         .controlSize(.large)
         .fixedSize()
-        .padding(4)
-        .glassSurface(Capsule())
         .frame(maxWidth: .infinity)
     }
 

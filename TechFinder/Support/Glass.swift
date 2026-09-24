@@ -1,17 +1,7 @@
 import SwiftUI
 
-// Liquid Glass needs the iOS 26 SDK (Xcode 26, Swift 6.2) and iOS 26. Everywhere else the app uses a
-// plain black background with solid dark controls in the same shapes.
-
-enum LiquidGlass {
-    /// Whether this build and device render real Liquid Glass.
-    static var isAvailable: Bool {
-        #if compiler(>=6.2)
-        if #available(iOS 26.0, *) { return true }
-        #endif
-        return false
-    }
-}
+// Liquid Glass needs the iOS 26 SDK (Xcode 26, Swift 6.2) and iOS 26. Everywhere else the controls are
+// solid dark shapes. The background is plain black either way.
 
 extension View {
     /// Places the view on a glass surface of the given shape.

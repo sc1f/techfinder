@@ -20,14 +20,12 @@
 		A53B642B1937F3BBE6264916 /* FrameOverlay.swift in Sources */ = {isa = PBXBuildFile; fileRef = 02E1E7C2C26E92316167533B /* FrameOverlay.swift */; };
 		AAC9585F0B64FD37B3E03AE2 /* TechFinderCore in Frameworks */ = {isa = PBXBuildFile; productRef = 4F3ADE5F9F9EBD2B68FDE251 /* TechFinderCore */; };
 		BFDAF99ECF19771555949878 /* SimulatedScene.swift in Sources */ = {isa = PBXBuildFile; fileRef = D8236BA655A2C43493EB68C3 /* SimulatedScene.swift */; };
-		D516CD532AC14CED099414D9 /* BackdropRenderer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0278C749E68457EAFD09D5C4 /* BackdropRenderer.swift */; };
 		DAC58F0B380E8635E72D78E4 /* HoldTip.swift in Sources */ = {isa = PBXBuildFile; fileRef = 79D6813D9D6BF670CBF0BFB6 /* HoldTip.swift */; };
 		E1D80B4CEC4FCCB0CC9FDEB9 /* FormatPickerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D5E41A047F1D41D66B678243 /* FormatPickerView.swift */; };
 		E522A13E91EA83540714F1AD /* ControlBar.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1FD8A5E79308384BE219F6D9 /* ControlBar.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
-		0278C749E68457EAFD09D5C4 /* BackdropRenderer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BackdropRenderer.swift; sourceTree = "<group>"; };
 		02E1E7C2C26E92316167533B /* FrameOverlay.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FrameOverlay.swift; sourceTree = "<group>"; };
 		09CCFCD19DD3612784D4ADFB /* DeviceOrientation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeviceOrientation.swift; sourceTree = "<group>"; };
 		1FD8A5E79308384BE219F6D9 /* ControlBar.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ControlBar.swift; sourceTree = "<group>"; };
@@ -63,7 +61,6 @@
 		05182DE10D16F162B4D84A2C /* Camera */ = {
 			isa = PBXGroup;
 			children = (
-				0278C749E68457EAFD09D5C4 /* BackdropRenderer.swift */,
 				C847B53F09284C239161CDE6 /* CameraController.swift */,
 				3CC170A9DDCC0F91DDFB4774 /* CameraPreview.swift */,
 			);
@@ -225,7 +222,6 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				D516CD532AC14CED099414D9 /* BackdropRenderer.swift in Sources */,
 				5E76CA51A6AFAF02F12DEA86 /* CameraController.swift in Sources */,
 				4FB64422AD093BBDF061360D /* CameraPreview.swift in Sources */,
 				E522A13E91EA83540714F1AD /* ControlBar.swift in Sources */,

@@ -46,7 +46,7 @@ struct ViewfinderView: View {
         let isSimulated = camera.status == .unavailable
 
         return ZStack {
-            background(zoom: solution?.zoom ?? 1)
+            Color.black.ignoresSafeArea()
             viewfinder(solution: solution)
             controls(solution: solution)
             sideReadout(solution: solution, isSimulated: isSimulated)
@@ -61,14 +61,6 @@ struct ViewfinderView: View {
         }
     }
 
-    @ViewBuilder
-    private func background(zoom: Double) -> some View {
-        if LiquidGlass.isAvailable {
-            Backdrop(camera: camera, zoom: zoom)
-        } else {
-            Color.black.ignoresSafeArea()
-        }
-    }
 
     private func viewfinder(solution: FramingSolution?) -> some View {
         GeometryReader { geometry in
@@ -526,41 +518,6 @@ private struct LensReadout: View {
         .contentTransition(.numericText())
         .animation(.smooth, value: lens)
         .animation(.smooth, value: format)
-    }
-}
-
-// MARK: - Backdrop
-
-/// A softly blurred, darkened copy of the live image filling the screen behind everything, so the
-/// Liquid Glass controls have light and colour to refract. Frames crossfade so it drifts rather than
-/// steps.
-private struct Backdrop: View {
-    let camera: CameraController
-    let zoom: Double
-
-    var body: some View {
-        Color.black
-            .overlay {
-                if camera.status == .unavailable {
-                    SimulatedScene(optics: camera.optics, zoom: zoom)
-                        .scaleEffect(1.7)
-                        .blur(radius: 30)
-                } else if let image = camera.backdrop {
-                    Image(decorative: image, scale: 1)
-                        .resizable()
-                        .interpolation(.high)
-                        .aspectRatio(contentMode: .fill)
-                        .blur(radius: 12)
-                        .scaleEffect(1.15)
-                        .id(ObjectIdentifier(image))
-                        .transition(.opacity)
-                }
-            }
-            .animation(.easeInOut(duration: 0.35), value: camera.backdrop.map(ObjectIdentifier.init))
-            .overlay(Color.black.opacity(0.35))
-            .clipped()
-            .ignoresSafeArea()
-            .allowsHitTesting(false)
     }
 }
 

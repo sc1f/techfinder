@@ -102,6 +102,12 @@ private struct NativeLensPicker: View {
         .pickerStyle(.segmented)
         .controlSize(.large)
         .fixedSize()
+        // Each redrawn label replaces the last outright. Animated, iOS 26 cross-fades every segment
+        // through a lighter block, which flashes while the labels turn.
+        .transaction { transaction in
+            transaction.animation = nil
+            transaction.disablesAnimations = true
+        }
         .onChange(of: rotation) { _, newRotation in
             turn(to: newRotation.radians)
         }

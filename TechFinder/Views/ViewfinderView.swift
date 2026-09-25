@@ -134,9 +134,15 @@ struct ViewfinderView: View {
 
             ZStack {
                 // One camera image throughout; in movement mode it is magnified and panned to the moved frame.
-                imageLayer(zoom: movement?.layout.zoom ?? solution?.zoom ?? 1)
-                    .scaleEffect(transform.scale)
+                let zoom = movement?.layout.zoom ?? solution?.zoom ?? 1
+                imageLayer(zoom: zoom)
+                    // While the camera ramps to a new zoom, scale its picture by how far it still has to
+                    // go, so the scene stays put under the frame instead of zooming out and back.
+                    .scaleEffect(transform.scale * CGFloat(camera.liveZoom.map { zoom / $0 } ?? 1))
                     .offset(transform.offset)
+                    // Turning movements on changes the camera's zoom; the picture follows the camera
+                    // rather than animating on its own. (The overview toggle, which keeps the zoom, animates.)
+                    .transaction(value: movements.isOn) { $0.animation = nil }
                 if let movement, let mapping {
                     MovementOverlay(layout: movement.layout, mapping: mapping, margin: movement.margin,
                                     showsGrid: showsGrid)
@@ -186,6 +192,7 @@ struct ViewfinderView: View {
 
             // Over the image but outside its gestures, so the buttons are hit and reported where they are.
             ImageNotices(rotation: orientation.rotation, size: imageRect.size,
+                         isTooWide: isTooWide(solution: solution, movement: movement),
                          lensName: lensNotice?.name, undo: undoText,
                          performUndo: performUndo,
                          zoom: abs(fill - Framing.defaultFill) > 0.001 ? fill / Framing.defaultFill : nil,
@@ -217,10 +224,14 @@ struct ViewfinderView: View {
             let bandTop = image.maxY + ScreenLayout.gap
             VStack(spacing: 0) {
                 Spacer(minLength: 0)
-                if !orientation.isLandscape, setupBlockHeight(solution: solution, movement: movement) > 0 {
-                    setupBlock(solution: solution, movement: movement)
-                    Spacer(minLength: Self.rowSpacing)
+                // Always there, so the image and the rows below stay put as movements come and go.
+                ZStack {
+                    if !orientation.isLandscape {
+                        setupBlock(solution: solution, movement: movement)
+                    }
                 }
+                .frame(height: GlassButtonMetrics.pillHeight)
+                Spacer(minLength: Self.rowSpacing)
                 ToolRow(rotation: orientation.rotation, showsGrid: $showsGrid, showsMovements: movementsToggle,
                         present: present)
                 Spacer(minLength: Self.rowSpacing)
@@ -241,39 +252,24 @@ struct ViewfinderView: View {
     /// The least space between rows of controls; any more room is shared out evenly.
     static let rowSpacing: CGFloat = 10
 
-    /// The movement controls when movements are on, with a warning above them when the frame reaches
-    /// past what the phone can see; otherwise that warning when the setup is too wide.
+    /// The movement controls, when movements are on.
     @ViewBuilder
     private func setupBlock(solution: FramingSolution?, movement: MovementInfo?) -> some View {
         if let movement {
-            VStack(spacing: 8) {
-                if movement.layout.isBeyondCamera {
-                    WarningTag()
-                        .transition(.opacity.combined(with: .scale(scale: 0.9, anchor: .bottom)))
-                }
-                MovementBar(state: $movements, margin: movement.margin,
-                            imageCircle: movement.imageCircle.map { ($0.diameter, movement.aperture, $0.isEstimate) },
-                            rotation: orientation.rotation,
-                            step: { delta in
-                                move(movements.axis, to: movements.movement[movements.axis] + delta, info: movement)
-                            },
-                            resetAll: { movements.movement = .zero })
-            }
-            .animation(.smooth, value: movement.layout.isBeyondCamera)
+            MovementBar(state: $movements, margin: movement.margin,
+                        imageCircle: movement.imageCircle.map { ($0.diameter, movement.aperture, $0.isEstimate) },
+                        rotation: orientation.rotation,
+                        step: { delta in
+                            move(movements.axis, to: movements.movement[movements.axis] + delta, info: movement)
+                        },
+                        resetAll: { movements.movement = .zero })
             .transition(.opacity)
-        } else if solution?.isClipped == true {
-            WarningTag()
-                .transition(.opacity.combined(with: .scale(scale: 0.9, anchor: .bottom)))
         }
     }
 
-    /// Height of `setupBlock`, for placing it turned in landscape.
-    private func setupBlockHeight(solution: FramingSolution?, movement: MovementInfo?) -> CGFloat {
-        let tag = WarningTag.height
-        if let movement {
-            return GlassButtonMetrics.pillHeight + (movement.layout.isBeyondCamera ? 8 + tag : 0)
-        }
-        return solution?.isClipped == true ? tag : 0
+    /// The setup, or with movements on the moved frame, reaches past what the phone can see.
+    private func isTooWide(solution: FramingSolution?, movement: MovementInfo?) -> Bool {
+        movement.map { $0.layout.isBeyondCamera } ?? (solution?.isClipped == true)
     }
 
     private var movementsToggle: Binding<Bool> {
@@ -441,7 +437,7 @@ struct ViewfinderView: View {
         if orientation.isLandscape {
             GeometryReader { geometry in
                 // Distance from the screen edge to the centre of the turned block.
-                let inset = 12 + setupBlockHeight(solution: solution, movement: movement) / 2
+                let inset = 12 + GlassButtonMetrics.pillHeight / 2
                 let turnedLeft = orientation.hold == .landscapeLeft
                 setupBlock(solution: solution, movement: movement)
                     .fixedSize()
@@ -468,14 +464,12 @@ struct ViewfinderView: View {
     /// Where the camera image goes, around what the control bands hold now. `geometry` spans the whole
     /// screen.
     private func screenLayout(_ geometry: GeometryProxy, solution: FramingSolution?, movement: MovementInfo?) -> ScreenLayout {
-        // As in `controls`: lens selector, meter, buttons and (upright) the movement controls or warning.
+        // As in `controls`: lens selector, meter, buttons and the movement controls' place. The same
+        // whether movements are on and however the phone is held (the taller, turned meter), so the
+        // image never moves or resizes.
         let pill = GlassButtonMetrics.pillHeight
-        var bottom = 8 + pill + Self.rowSpacing + MeterBar.height(turned: orientation.isLandscape) + Self.rowSpacing
-            + ToolRow.height
-        let setup = setupBlockHeight(solution: solution, movement: movement)
-        if !orientation.isLandscape, setup > 0 {
-            bottom += Self.rowSpacing + setup
-        }
+        let bottom = 8 + pill + Self.rowSpacing + MeterBar.height(turned: true) + Self.rowSpacing
+            + ToolRow.height + Self.rowSpacing + pill
         return ScreenLayout.make(screen: geometry.size, safeTop: safeArea.top, safeBottom: safeArea.bottom,
                                  aspectRatio: camera.optics.aspectRatio, top: 0, bottom: bottom)
     }
@@ -567,6 +561,8 @@ struct ViewfinderView: View {
 private struct ImageNotices: View {
     let rotation: Angle
     let size: CGSize
+    /// Shows "Wider than the iPhone can see".
+    let isTooWide: Bool
     let lensName: String?
     let undo: String?
     let performUndo: () -> Void
@@ -577,6 +573,10 @@ private struct ImageNotices: View {
     var body: some View {
         let isTurned = rotation != .zero
         VStack(spacing: 8) {
+            if isTooWide {
+                WarningTag()
+                    .transition(.opacity)
+            }
             if let lensName {
                 Text(lensName)
                     .font(.subheadline.weight(.semibold))
@@ -628,6 +628,7 @@ private struct ImageNotices: View {
         .modifier(TurnedWhenSideways(rotation: rotation))
         .frame(width: size.width, height: size.height)
         .animation(.smooth(duration: 0.25), value: zoom == nil)
+        .animation(.smooth(duration: 0.25), value: isTooWide)
     }
 }
 
@@ -694,7 +695,7 @@ private struct ToolRow: View {
     }
 }
 
-/// Shown above the buttons when the setup, or the moved frame, is wider than the phone's camera can see.
+/// Shown over the image when the setup, or the moved frame, is wider than the phone's camera can see.
 private struct WarningTag: View {
     static let height: CGFloat = 22
 

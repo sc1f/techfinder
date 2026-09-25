@@ -26,6 +26,8 @@ final class CameraController: @unchecked Sendable {
     private(set) var meteredEV: Double?
     /// Most of the metered spot is clipped white, so the reading is too dark.
     private(set) var meterIsClipped = false
+    /// The zoom the camera is at right now, following a ramp as it moves. Nil until the camera is set up.
+    private(set) var liveZoom: Double?
 
     let session = AVCaptureSession()
     private let queue = DispatchQueue(label: "TechFinder.camera")
@@ -35,6 +37,7 @@ final class CameraController: @unchecked Sendable {
     @ObservationIgnored private var requestedZoom: Double = 1
     @ObservationIgnored private var appliedZoom: Double?
     @ObservationIgnored private var runtimeErrorObserver: NSObjectProtocol?
+    @ObservationIgnored private var zoomObservation: NSKeyValueObservation?
     private let meterOutput = AVCaptureVideoDataOutput()
     private let spotMeter = SpotMeter()
     private let meterQueue = DispatchQueue(label: "TechFinder.meter", qos: .userInitiated)
@@ -182,6 +185,10 @@ final class CameraController: @unchecked Sendable {
 
         self.device = device
         isConfigured = true
+        zoomObservation = device.observe(\.videoZoomFactor, options: [.initial, .new]) { [weak self] device, _ in
+            let factor = Double(device.videoZoomFactor)
+            DispatchQueue.main.async { self?.liveZoom = factor }
+        }
         addSpotMeter(for: device)
 
         applyRequestedZoom()

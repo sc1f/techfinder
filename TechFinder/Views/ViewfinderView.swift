@@ -30,6 +30,8 @@ struct ViewfinderView: View {
     /// What the camera is framing for: movements, the lens and the format. A change is a switch, which
     /// jumps the zoom under a blur, rather than a ramp.
     @State private var framingKey: String?
+    /// Movements widened the camera to the whole image circle; it stays wide until they turn off.
+    @State private var movementsCameraIsWide = false
     @State private var cameraSwitch: UUID?
     private var isSwitchingCamera: Bool { cameraSwitch != nil }
     @State private var showsSpotHint = false
@@ -62,18 +64,23 @@ struct ViewfinderView: View {
         /// Room between the furthest corner and the image circle edge, in mm.
         var margin: Double? { imageCircle.map { geometry.margin(movement, imageCircle: $0.diameter) } }
         var movement: Movement
+        /// The moved frame is nearing the edge of what the camera sees at the frame's own zoom.
+        var needsWiderCamera: Bool
     }
 
     var body: some View {
         let solution = self.solution
         let exposure = ExposureSolver.solve(library.exposure, meteredEV100: meteredEV)
-        let movement = movementInfo(exposure: exposure)
+        let movement = movementInfo(exposure: exposure, solution: solution)
         let zoom = movement?.layout.zoom ?? solution?.zoom ?? 1
         feedback(presentations(lifecycle(screen(solution: solution, exposure: exposure, movement: movement),
-                                         zoom: zoom)))
+                                         zoom: zoom, needsWiderCamera: movement?.needsWiderCamera == true)))
     }
 
-    private func movementInfo(exposure: ExposureSolution) -> MovementInfo? {
+    /// The camera keeps the frame's zoom when movements turn on, so nothing changes at zero. It widens
+    /// to fit the whole image circle, once, when the moved frame nears the edge of what it sees or the
+    /// overview opens, and stays wide until movements turn off.
+    private func movementInfo(exposure: ExposureSolution, solution: FramingSolution?) -> MovementInfo? {
         guard movements.isOn, let lens = library.selectedLens else { return nil }
         // Use the lens's quoted figure at the aperture closest to the meter's.
         let figure = ImageCircleModel.nearest(lens.imageCircle, to: ExposureScale.aperture(exposure.apertureIndex))
@@ -84,8 +91,12 @@ struct ViewfinderView: View {
                                             movement: movements.movement, imageCircle: imageCircle?.diameter,
                                             limits: library.movementLimits, turnedLeft: turnedLeft,
                                             optics: camera.optics)
-        return MovementInfo(layout: layout, geometry: geometry, imageCircle: imageCircle, aperture: aperture,
-                            focalLength: lens.focalLength, movement: movements.movement)
+        let atFramingZoom = solution.map { layout.withCamera(zoom: $0.zoom, optics: camera.optics) }
+        let needsWider = atFramingZoom.map { !$0.frameFitsCamera() } ?? true
+        let isWide = movements.showsOverview || movementsCameraIsWide || needsWider
+        return MovementInfo(layout: isWide ? layout : atFramingZoom ?? layout, geometry: geometry,
+                            imageCircle: imageCircle, aperture: aperture, focalLength: lens.focalLength,
+                            movement: movements.movement, needsWiderCamera: needsWider)
     }
 
     /// Nil when upright; whether the phone's top points left when sideways.
@@ -219,7 +230,8 @@ struct ViewfinderView: View {
     }
 
     private func performUndo() {
-        guard let reset = undoableReset, let movement = movementInfo(exposure: ExposureSolver.solve(library.exposure, meteredEV100: meteredEV)) else { return }
+        let exposure = ExposureSolver.solve(library.exposure, meteredEV100: meteredEV)
+        guard let reset = undoableReset, let movement = movementInfo(exposure: exposure, solution: solution) else { return }
         movements.axis = reset.axis
         move(reset.axis, to: reset.value, info: movement)
         withAnimation(.smooth(duration: 0.2)) { undoableReset = nil }
@@ -306,7 +318,7 @@ struct ViewfinderView: View {
 
     // MARK: - Behaviour
 
-    private func lifecycle(_ content: some View, zoom: Double) -> some View {
+    private func lifecycle(_ content: some View, zoom: Double, needsWiderCamera: Bool) -> some View {
         content
             .animation(Self.turn, value: orientation.hold)
             .statusBarHidden()
@@ -342,7 +354,8 @@ struct ViewfinderView: View {
                 hasSeenSpotHint = true
             }
             .onChange(of: zoom, initial: true) { oldZoom, zoom in
-                let key = "\(movements.isOn) \(library.selectedLensID?.uuidString ?? "") \(library.selectedFormatID)"
+                let isWide = movements.showsOverview || movementsCameraIsWide
+                let key = "\(movements.isOn) \(isWide) \(library.selectedLensID?.uuidString ?? "") \(library.selectedFormatID)"
                 // A pinch never changes the key, and a switch that barely moves the zoom needs no cover.
                 let isSwitch = framingKey != nil && framingKey != key && abs(log(zoom / oldZoom)) > 0.05
                 framingKey = key
@@ -356,6 +369,13 @@ struct ViewfinderView: View {
                 }
                 camera.setZoom(zoom, immediately: isSwitch)
             }
+            .onChange(of: needsWiderCamera) { _, needsWider in
+                if needsWider { movementsCameraIsWide = true }
+            }
+            .onChange(of: movements.isOn) { _, isOn in
+                if !isOn { movementsCameraIsWide = false }
+            }
+            .onChange(of: library.selectedLensID) { movementsCameraIsWide = false }
             .task(id: cameraSwitch) {
                 guard cameraSwitch != nil else { return }
                 try? await Task.sleep(for: .seconds(0.45))

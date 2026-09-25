@@ -400,6 +400,20 @@ final class MovementTests: XCTestCase {
         XCTAssertTrue(layout(rise: 20).isBeyondCamera)
     }
 
+    /// At the frame's own zoom the unmoved frame fits; a big rise needs the wider camera.
+    func testMovementsKeepTheFramingZoomUntilTheFrameNearsTheEdge() {
+        let optics = CameraOptics(horizontalFieldOfView: 108.3, aspectRatio: 4.0 / 3.0, minZoom: 1, maxZoom: 15)
+        let format = CaptureFormat(id: "44", name: "44×33", width: 43.8, height: 32.9, category: .digitalBack)
+        let framing = Framing.solve(focalLength: 80, format: format, optics: optics, fill: Framing.defaultFill)
+        func layout(rise: Double) -> MovementLayout {
+            MovementPlanner.layout(format: format, focalLength: 80, movement: Movement(rise: rise, shift: 0),
+                                   imageCircle: 90, limits: .default, turnedLeft: nil, optics: optics)
+                .withCamera(zoom: framing.zoom, optics: optics)
+        }
+        XCTAssertTrue(layout(rise: 0).frameFitsCamera())
+        XCTAssertFalse(layout(rise: 15).frameFitsCamera())
+    }
+
     // MARK: - Screen layout
 
     /// Portrait screens in points with their top and bottom safe areas: every screen size iOS 17+ runs on.

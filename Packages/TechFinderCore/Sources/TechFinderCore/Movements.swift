@@ -233,6 +233,22 @@ public struct MovementLayout: Equatable, Sendable {
         max(circleRadius ?? 0, abs(frameCenterY) + frameHalfHeight)
     }
 
+    /// The same layout with the phone camera at another zoom, such as the one it already has for the
+    /// frame, so turning movements on doesn't change cameras until it must.
+    public func withCamera(zoom: Double, optics: CameraOptics) -> MovementLayout {
+        var layout = self
+        layout.zoom = zoom
+        layout.imageHalfWidth = optics.tanHalfShort / zoom
+        layout.imageHalfHeight = optics.tanHalfLong / zoom
+        return layout
+    }
+
+    /// The moved frame stays within `fraction` of the camera's view, with a margin before its edge.
+    public func frameFitsCamera(fraction: Double = 0.95) -> Bool {
+        abs(frameCenterX) + frameHalfWidth <= fraction * imageHalfWidth
+            && abs(frameCenterY) + frameHalfHeight <= fraction * imageHalfHeight
+    }
+
     /// Part of the moved frame is outside what the phone camera can see, even at its widest: an
     /// ultrawide lens, or a large movement, needs more than the iPhone's field of view.
     public var isBeyondCamera: Bool {

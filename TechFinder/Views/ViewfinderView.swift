@@ -224,14 +224,6 @@ struct ViewfinderView: View {
             let bandTop = image.maxY + ScreenLayout.gap
             VStack(spacing: 0) {
                 Spacer(minLength: 0)
-                // Always there, so the image and the rows below stay put as movements come and go.
-                ZStack {
-                    if !orientation.isLandscape {
-                        setupBlock(solution: solution, movement: movement)
-                    }
-                }
-                .frame(height: GlassButtonMetrics.pillHeight)
-                Spacer(minLength: Self.rowSpacing)
                 ToolRow(rotation: orientation.rotation, showsGrid: $showsGrid, showsMovements: movementsToggle,
                         present: present)
                 Spacer(minLength: Self.rowSpacing)
@@ -239,7 +231,18 @@ struct ViewfinderView: View {
                          ev100: meteredEV, readingIsClipped: camera.meterIsClipped, step: library.meterStep,
                          rotation: orientation.rotation)
                 Spacer(minLength: Self.rowSpacing)
-                ControlBar(present: present, rotation: orientation.rotation)
+                // With movements on, the movement controls take the lens selector's place (the Lenses
+                // button still opens the library), so nothing else moves. Held sideways they run along
+                // the viewer's bottom edge instead, and the selector stays.
+                ZStack {
+                    if movement != nil, !orientation.isLandscape {
+                        setupBlock(solution: solution, movement: movement)
+                    } else {
+                        ControlBar(present: present, rotation: orientation.rotation)
+                            .transition(.opacity)
+                    }
+                }
+                .frame(height: GlassButtonMetrics.pillHeight)
                 Spacer(minLength: 8)
             }
             .padding(.horizontal, 16)
@@ -464,12 +467,11 @@ struct ViewfinderView: View {
     /// Where the camera image goes, around what the control bands hold now. `geometry` spans the whole
     /// screen.
     private func screenLayout(_ geometry: GeometryProxy, solution: FramingSolution?, movement: MovementInfo?) -> ScreenLayout {
-        // As in `controls`: lens selector, meter, buttons and the movement controls' place. The same
-        // whether movements are on and however the phone is held (the taller, turned meter), so the
-        // image never moves or resizes.
-        let pill = GlassButtonMetrics.pillHeight
-        let bottom = 8 + pill + Self.rowSpacing + MeterBar.height(turned: true) + Self.rowSpacing
-            + ToolRow.height + Self.rowSpacing + pill
+        // As in `controls`: the lens selector (or movement controls in its place), meter and buttons.
+        // The same whether movements are on and however the phone is held, so the image never moves
+        // or resizes.
+        let bottom = 8 + GlassButtonMetrics.pillHeight + Self.rowSpacing + MeterBar.height
+            + Self.rowSpacing + ToolRow.height
         return ScreenLayout.make(screen: geometry.size, safeTop: safeArea.top, safeBottom: safeArea.bottom,
                                  aspectRatio: camera.optics.aspectRatio, top: 0, bottom: bottom)
     }

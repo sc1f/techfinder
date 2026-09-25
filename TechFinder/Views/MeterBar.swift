@@ -25,8 +25,8 @@ struct MeterBar: View {
     /// How the phone is turned: the text and value lists turn by this to read upright.
     let rotation: Angle
 
-    /// Taller held sideways, where the pill's height is the width the turned text has.
-    static func height(turned: Bool) -> CGFloat { turned ? 56 : 44 }
+    /// As tall as the other controls, upright or turned (the turned text scales to fit).
+    static let height: CGFloat = GlassButtonMetrics.pillHeight
 
     var body: some View {
         // The viewer's top is the screen's right when turned left (+90°), its left when turned right.
@@ -124,7 +124,7 @@ private struct MeterDial: View {
 
             arrow("chevron.right", enabled: sign > 0 ? canRaise : canLower) { apply(sign) }
         }
-        .frame(height: MeterBar.height(turned: rotation != .zero))
+        .frame(height: MeterBar.height)
         // Swipe anywhere along the pill, arrows included.
         .gesture(swipe)
         // Plain glass: interactive glass stretches with the finger, which a swipe control shouldn't.
@@ -180,7 +180,13 @@ private struct MeterDial: View {
     private var labels: some View {
         VStack(spacing: 0) {
             HStack(spacing: 3) {
-                Text(caption)
+                // Turned, the pill is too narrow for the words; the values say what they are, and ISO
+                // keeps its name.
+                if rotation == .zero {
+                    Text(caption)
+                } else if caption.hasPrefix("ISO") {
+                    Text("ISO")
+                }
                 switch badge {
                 case .locked:
                     Image(systemName: "lock.fill")

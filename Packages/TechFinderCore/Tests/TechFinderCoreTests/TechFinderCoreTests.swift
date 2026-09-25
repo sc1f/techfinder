@@ -417,11 +417,11 @@ final class MovementTests: XCTestCase {
         ("iPhone Air", CGSize(width: 420, height: 912), 68, 34),
     ]
 
-    /// Nothing above; below, the lens row, meter and buttons, plus movement controls and a warning at
-    /// most, and the meter turned taller held sideways.
+    /// Nothing above; below, the lens row (or movement controls in its place), meter and labelled
+    /// buttons, and for margin a band with an extra row.
     private let top: CGFloat = 0
-    private let bottoms: [CGFloat] = [8 + 48 + 10 + 40 + 10 + 48, 8 + 48 + 10 + 40 + 10 + 48 + 10 + 48 + 8 + 22,
-                                      8 + 48 + 10 + 52 + 10 + 48]
+    private let bottoms: [CGFloat] = [8 + 48 + 10 + 48 + 10 + 65, 8 + 48 + 10 + 48 + 10 + 65 + 10 + 48 + 8 + 22,
+                                      8 + 48 + 10 + 48 + 10 + 65]
 
     func testControlsStayInTheBlackBandsOnEveryIPhone() {
         for screen in screens {

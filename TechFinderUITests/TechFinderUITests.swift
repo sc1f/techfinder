@@ -264,14 +264,17 @@ final class TechFinderUITests: XCTestCase {
                 ("settings", app.buttons["settingsButton"].firstMatch),
                 ("lenses", app.buttons["lensButton"].firstMatch),
                 ("frame", app.buttons["formatButton"].firstMatch),
-                ("lens selector", app.otherElements["lensSelector"].firstMatch),
             ]
             controls += [("ISO", app.otherElements["meter-iso"].firstMatch),
                          ("aperture", app.otherElements["meter-aperture"].firstMatch),
                          ("shutter", app.otherElements["meter-shutter"].firstMatch)]
             if hold == "portrait" {
-                // Held sideways the movement controls run along the viewer's bottom edge, over the image.
+                // Upright, the movement controls take the lens selector's place. Held sideways they run
+                // along the viewer's bottom edge, over the image, and the selector stays.
                 controls.append(("movement dial", app.otherElements["movementDial"].firstMatch))
+                XCTAssertFalse(app.otherElements["lensSelector"].exists, "Movements take the selector's place")
+            } else {
+                controls.append(("lens selector", app.otherElements["lensSelector"].firstMatch))
             }
             for (name, element) in controls {
                 XCTAssertTrue(element.waitForExistence(timeout: 5), "\(name) exists (\(hold))")

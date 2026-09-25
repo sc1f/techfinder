@@ -28,6 +28,8 @@ public final class LibraryStore {
     }
     /// Added to every meter reading, in EV, to match a reference meter.
     public var meterCalibration: Double = 0 { didSet { save() } }
+    /// Average over the frame, or a spot at its centre.
+    public var meteringMode: MeteringMode = .average { didSet { save() } }
 
     @ObservationIgnored private let fileURL: URL?
 
@@ -47,6 +49,7 @@ public final class LibraryStore {
             movementLimits = snapshot.movementLimits ?? .default
             meterStep = snapshot.meterStep ?? 3
             meterCalibration = snapshot.meterCalibration ?? 0
+            meteringMode = snapshot.meteringMode ?? .average
         } else {
             lenses = FormatCatalog.starterLenses.sorted(by: Self.lensOrder)
             selectedLensID = lenses.first(where: { $0.focalLength == 50 })?.id ?? lenses.first?.id
@@ -136,6 +139,7 @@ public final class LibraryStore {
         var movementLimits: MovementLimits?
         var meterStep: Int?
         var meterCalibration: Double?
+        var meteringMode: MeteringMode?
     }
 
     private static func lensOrder(_ a: Lens, _ b: Lens) -> Bool {
@@ -158,7 +162,7 @@ public final class LibraryStore {
                                 selectedLensID: selectedLensID, selectedFormatID: selectedFormatID,
                                 exposure: exposure, exposureLimits: exposureLimits,
                                 movementLimits: movementLimits, meterStep: meterStep,
-                                meterCalibration: meterCalibration)
+                                meterCalibration: meterCalibration, meteringMode: meteringMode)
         do {
             let data = try JSONEncoder().encode(snapshot)
             try data.write(to: fileURL, options: .atomic)

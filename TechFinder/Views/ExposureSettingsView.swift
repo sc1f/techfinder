@@ -36,6 +36,13 @@ struct ExposureSettingsView: View {
                 }
 
                 Section {
+                    Picker("Metering", selection: Binding(get: { library.meteringMode },
+                                                          set: { library.meteringMode = $0 })) {
+                        Text("Average").tag(MeteringMode.average)
+                        Text("Spot").tag(MeteringMode.spot)
+                    }
+                    .pickerStyle(.segmented)
+                    .accessibilityIdentifier("meteringPicker")
                     Picker("Steps", selection: Binding(get: { library.meterStep }, set: { library.meterStep = $0 })) {
                         Text("Full Stop").tag(3)
                         Text("⅓ Stop").tag(1)
@@ -49,7 +56,7 @@ struct ExposureSettingsView: View {
                 } header: {
                     Text("Light Meter")
                 } footer: {
-                    Text("Steps: how far each arrow tap or swipe moves ISO, aperture and shutter. Calibration: compare the EV shown by ISO with a handheld spot meter on a grey card; if the app reads consistently high or low, offset it here.")
+                    Text("Metering: Average reads the whole taking frame, evenly weighted; Spot reads a 3° circle at its centre, drawn on the image. Steps: how far each arrow tap or swipe moves ISO, aperture and shutter. Calibration: compare the EV shown by ISO with a handheld spot meter on a grey card; if the app reads consistently high or low, offset it here.")
                 }
 
                 limitSection(.iso, title: "ISO", lower: "Lowest", upper: "Highest",

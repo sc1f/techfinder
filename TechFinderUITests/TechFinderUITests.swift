@@ -66,6 +66,12 @@ final class TechFinderUITests: XCTestCase {
         settings.tap()
         XCTAssertTrue(app.navigationBars["Settings"].waitForExistence(timeout: 5))
         attachScreenshot(of: app, named: "settings")
+        // Average metering by default; a spot meter is one switch away.
+        let metering = app.segmentedControls["meteringPicker"].firstMatch
+        XCTAssertTrue(metering.waitForExistence(timeout: 5))
+        XCTAssertTrue(metering.buttons["Average"].isSelected)
+        metering.buttons["Spot"].tap()
+        XCTAssertTrue(metering.buttons["Spot"].isSelected)
         app.buttons["Done"].firstMatch.tap()
         XCTAssertTrue(settings.waitForExistence(timeout: 5))
     }

@@ -238,6 +238,15 @@ final class ExposureTests: XCTestCase {
         XCTAssertFalse(ExposureScale.isFullStop(ExposureScale.labels(.iso).firstIndex(of: "80")!, axis: .iso))
     }
 
+    func testMeteringModeDefaultsToAverageAndIsSaved() throws {
+        let url = FileManager.default.temporaryDirectory.appendingPathComponent("metering-\(UUID()).json")
+        defer { try? FileManager.default.removeItem(at: url) }
+        let store = LibraryStore(fileURL: url)
+        XCTAssertEqual(store.meteringMode, .average)
+        store.meteringMode = .spot
+        XCTAssertEqual(LibraryStore(fileURL: url).meteringMode, .spot)
+    }
+
     func testChangingToWholeStopsSnapsTheLimits() {
         let store = LibraryStore(fileURL: nil)
         store.meterStep = 1

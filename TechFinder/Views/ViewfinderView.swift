@@ -166,16 +166,18 @@ struct ViewfinderView: View {
                     FrameOverlay(solution: solution, showsGrid: showsGrid)
                 }
                 let spot = spotPlacement(imageSize: imageRect.size, zoom: movement?.layout.zoom ?? solution?.zoom ?? 1,
-                                         movement: movement, mapping: mapping)
+                                         solution: solution, movement: movement, mapping: mapping)
+                // The spot is drawn in spot metering; averaging reads the frame itself.
                 Circle()
                     .stroke(.white.opacity(0.85), lineWidth: 1)
                     .frame(width: spot.radius * 2, height: spot.radius * 2)
                     .position(spot.location)
+                    .opacity(library.meteringMode == .spot ? 1 : 0)
                     .allowsHitTesting(false)
                     .onChange(of: spot.region, initial: true) { _, region in
                         camera.setSpot(region)
                     }
-                if showsSpotHint {
+                if showsSpotHint, library.meteringMode == .spot {
                     // Below the circle as the viewer holds the phone.
                     let angle = orientation.rotation.radians
                     let distance = spot.radius + 16
@@ -553,9 +555,10 @@ struct ViewfinderView: View {
                                  aspectRatio: camera.optics.aspectRatio, top: 0, bottom: bottom)
     }
 
-    /// Where the spot meter reads, on screen and on the sensor: a tapped point, else the moved frame's
-    /// centre with movements on, else the centre cross. `radius` is in points.
-    private func spotPlacement(imageSize: CGSize, zoom: Double, movement: MovementInfo?,
+    /// Where the meter reads, on screen and on the sensor, centred on the frame (the moved frame with
+    /// movements on). Spot metering reads a 3° circle there (`radius`, in points); average metering reads
+    /// the whole taking frame.
+    private func spotPlacement(imageSize: CGSize, zoom: Double, solution: FramingSolution?, movement: MovementInfo?,
                                mapping: MovementMapping?) -> (location: CGPoint, radius: CGFloat, region: SpotMeter.Region) {
         let optics = camera.optics
         let halfWidth = optics.tanHalfShort / zoom
@@ -577,7 +580,15 @@ struct ViewfinderView: View {
         // Portrait image position, then turned into the sensor's landscape coordinates.
         let u = 0.5 + tanX / (2 * halfWidth)
         let v = 0.5 + tanY / (2 * halfLong)
-        return (location, screenRadius, SpotMeter.Region(center: CGPoint(x: v, y: 1 - u), radius: radius))
+        let center = CGPoint(x: v, y: 1 - u)
+        if library.meteringMode == .average {
+            // The frame's half-size in tangent units; the sensor's width runs along the frame's long side.
+            let frameHalfX = movement?.layout.frameHalfWidth ?? (solution.map { $0.shortFraction * halfWidth } ?? halfWidth)
+            let frameHalfY = movement?.layout.frameHalfHeight ?? (solution.map { $0.longFraction * halfLong } ?? halfLong)
+            let frame = CGSize(width: frameHalfY / (2 * halfLong), height: frameHalfX / (2 * halfWidth))
+            return (location, screenRadius, SpotMeter.Region(center: center, radius: frame, isRectangle: true))
+        }
+        return (location, screenRadius, SpotMeter.Region(center: center, radius: radius))
     }
 
     /// Dragging on the image with movements on moves the chosen axis only: in the overview the frame

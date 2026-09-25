@@ -112,6 +112,14 @@ public enum ExposureScale {
     }
 }
 
+/// What the light meter reads.
+public enum MeteringMode: String, Codable, CaseIterable, Sendable {
+    /// The whole taking frame, evenly weighted.
+    case average
+    /// A small spot at the centre of the frame.
+    case spot
+}
+
 /// The photographer's exposure: ISO is always set by hand, and so is either the aperture or the shutter;
 /// the meter gives the other.
 public struct ExposureSettings: Codable, Equatable, Sendable {

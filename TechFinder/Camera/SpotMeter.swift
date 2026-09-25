@@ -2,21 +2,22 @@ import AVFoundation
 import os
 import TechFinderCore
 
-/// A reflected-light spot meter built on the camera's video frames.
+/// A reflected-light meter built on the camera's video frames: a small spot, or the whole taking frame.
 ///
-/// It averages the linear brightness inside a small circle and turns it into an exposure value at
-/// ISO 100 using the exposure the frame was taken with:
+/// It averages the linear brightness inside the region and turns it into an exposure value at ISO 100
+/// using the exposure the frame was taken with:
 ///
 ///     EV100 = log2(N² / t) − log2(ISO / 100) + log2(Y / 0.18)
 ///
 /// so a spot the camera renders as mid-grey (18%) reads exactly the camera's own exposure. Spots that
 /// are mostly clipped white read too dark and are flagged.
 final class SpotMeter: NSObject, AVCaptureVideoDataOutputSampleBufferDelegate {
-    /// Where to meter, in the sensor's landscape image: centre in 0...1 and radius as a share of the
-    /// image width and height.
+    /// Where to meter, in the sensor's landscape image: centre in 0...1 and half-size (radius) as a share
+    /// of the image width and height, inside an ellipse (a spot) or a rectangle (the frame).
     struct Region: Equatable {
         var center = CGPoint(x: 0.5, y: 0.5)
         var radius = CGSize(width: 0.02, height: 0.027)
+        var isRectangle = false
     }
 
     struct Reading {
@@ -24,6 +25,7 @@ final class SpotMeter: NSObject, AVCaptureVideoDataOutputSampleBufferDelegate {
         /// Most of the spot is at full brightness, so the reading is a lower bound.
         var isClipped: Bool
     }
+
 
     /// Called on the main thread with each reading.
     var onReading: ((Reading) -> Void)?
@@ -58,8 +60,8 @@ final class SpotMeter: NSObject, AVCaptureVideoDataOutputSampleBufferDelegate {
         DispatchQueue.main.async { [weak self] in self?.onReading?(reading) }
     }
 
-    /// Mean linear luminance (0...1) of the luma plane inside the region's ellipse, and the share of
-    /// samples at full brightness. Expects full-range biplanar YCbCr.
+    /// Mean linear luminance (0...1) of the luma plane inside the region, and the share of samples at
+    /// full brightness. Expects full-range biplanar YCbCr.
     private func averageLinearLuminance(_ buffer: CVPixelBuffer, region: Region) -> (Double, Double)? {
         guard CVPixelBufferGetPlaneCount(buffer) >= 1 else { return nil }
         CVPixelBufferLockBaseAddress(buffer, .readOnly)
@@ -75,8 +77,8 @@ final class SpotMeter: NSObject, AVCaptureVideoDataOutputSampleBufferDelegate {
         let cy = Double(region.center.y) * Double(height)
         let rx = max(Double(region.radius.width) * Double(width), 2)
         let ry = max(Double(region.radius.height) * Double(height), 2)
-        // About 40 samples across the spot, whatever its size in pixels.
-        let step = max(Int(2 * rx / 40), 1)
+        // About 40 samples across a spot, or 80 across the frame, whatever its size in pixels.
+        let step = max(Int(2 * max(rx, ry) / (region.isRectangle ? 80 : 40)), 1)
 
         var total = 0.0
         var count = 0
@@ -88,7 +90,7 @@ final class SpotMeter: NSObject, AVCaptureVideoDataOutputSampleBufferDelegate {
                 while x <= Int(cx + rx) {
                     let dx = (Double(x) - cx) / rx
                     let dy = (Double(y) - cy) / ry
-                    if x >= 0, x < width, dx * dx + dy * dy <= 1 {
+                    if x >= 0, x < width, region.isRectangle || dx * dx + dy * dy <= 1 {
                         let value = Double(pixels[y * rowBytes + x]) / 255
                         total += Self.linear(value)
                         count += 1

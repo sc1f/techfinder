@@ -14,12 +14,13 @@ A minimal iPhone viewfinder for technical-camera photographers. Choose a lens an
   - Steps are full stops by default, landing on the standard series (ISO 50, 64, 100, 200, 400…; f/5.6, 8, 11…; 1/125, 1/250…), or ⅓ stop in Settings. The limit pickers in Settings follow the same steps; switching to full stops moves each limit to its nearest whole stop (f/1.1 becomes f/1).
   - Tap ISO, aperture or shutter for a list of values within your limits (it holds still while open, even as the meter keeps reading): whole stops (1/30, 1/60, 1/125…; f/5.6, 8, 11…), or thirds with ⅓-stop steps. Picking the metered value sets it by hand.
   - ISO is always set by hand, and so is either the aperture or the shutter (lock icon). The meter gives the other (A). Pick the metered value from its list, or change it, to set it by hand instead.
-- **Spot meter.**
-  - The meter reads a 3° spot, drawn as a circle at the centre cross (the moved frame's centre with movements on). It converts the spot's brightness to EV at ISO 100 using the camera's exposure, so a mid-grey spot reads correct.
+- **Metering.**
+  - The meter averages the whole taking frame, evenly weighted, so its reading follows your composition and movements. Switch to a spot meter in Settings › Light Meter: it reads a 3° spot, drawn as a circle, at the frame's centre (the moved frame's centre with movements on).
+  - Either way it converts the brightness to EV at ISO 100 using the camera's exposure, so a mid-grey area reads correct.
   - The ISO pill shows the live reading as EV at ISO 100. To calibrate, meter a grey card with a handheld spot meter and set any consistent difference in Settings › Calibration.
-  - Values you set stay within the limits in Settings: the arrows and swipes stop there, and the lists only offer values inside them. The metered value stops at the limits too; when the light needs more than they allow, it turns orange with a warning sign and a notice over the image says how far off the exposure is, such as "Underexposed 2⅓ stops".
-  - A metered value also turns orange with a warning sign if most of the spot is clipped white.
-  - The first time, a label names the spot circle.
+  - Values you set stay within the limits in Settings: the arrows and swipes stop there, and the lists only offer values inside them. The metered value stops at the limits too; when the light needs more than they allow, it turns orange with a warning sign and a notice at the bottom of the image says how far off the exposure is, such as "Underexposed 2⅓ stops".
+  - A metered value also turns orange with a warning sign if most of the metered area is clipped white.
+  - The first time you use the spot meter, a label names its circle.
 - **Controls.**
   - All the controls sit below the camera image, within thumb reach, sharing out the space evenly. From the top down: the meter, the lens selector (or the movement controls in its place), and the bottom row.
   - The bottom row, left to right: Settings, Grid, Frame (sensor or film format), and a Lenses | Movements switch for the row above. Settings sets the ISO, aperture and shutter limits of your equipment, and opens the lens library (add, edit and choose lenses and their image circles); so does a long press on the lens selector.

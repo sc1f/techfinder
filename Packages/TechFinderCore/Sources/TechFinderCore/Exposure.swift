@@ -181,6 +181,17 @@ public struct ExposureSettings: Codable, Equatable, Sendable {
         }
     }
 
+    /// Keeps ISO and the value set by hand within the equipment's limits.
+    public mutating func clamp(to limits: ExposureLimits) {
+        func clamped(_ index: Int, _ range: ClosedRange<Int>) -> Int { min(max(index, range.lowerBound), range.upperBound) }
+        isoIndex = clamped(isoIndex, limits.iso)
+        switch lockedAxis {
+        case .aperture: apertureIndex = clamped(apertureIndex, limits.aperture)
+        case .shutter: shutterIndex = clamped(shutterIndex, limits.shutter)
+        case .iso: break
+        }
+    }
+
     /// Holds aperture or shutter at its current value and lets the other follow the meter.
     public mutating func lock(_ axis: ExposureAxis, from solution: ExposureSolution) {
         apertureIndex = solution.apertureIndex
@@ -193,7 +204,8 @@ public struct ExposureSettings: Codable, Equatable, Sendable {
     }
 }
 
-/// The photographer's equipment limits. Values outside them are shown as warnings, not prevented.
+/// The photographer's equipment limits. Values set by hand stay within them; when the meter would need
+/// more than they allow, it stops at the limit and reports the exposure error instead.
 public struct ExposureLimits: Codable, Equatable, Sendable {
     public var iso: ClosedRange<Int>
     /// Widest (lowest f-number) to smallest aperture.
@@ -248,6 +260,9 @@ public struct ExposureSolution: Equatable, Sendable {
     public var meteredAxis: ExposureAxis?
     /// The metered value fell off the end of its scale.
     public var meteredValueIsOffScale: Bool
+    /// How far the shown settings are from a correct exposure, in stops, when the meter reached the end
+    /// of the equipment's limits: positive is overexposed, negative underexposed, zero when correct.
+    public var exposureError: Double = 0
 
     public func index(_ axis: ExposureAxis) -> Int {
         switch axis {
@@ -281,8 +296,11 @@ public enum ExposureSolver {
     ///
     /// - Parameters:
     ///   - meteredEV100: The scene's exposure value at ISO 100 from the light meter, or nil if unknown.
+    ///   - limits: The equipment's limits. The metered value stops at them, and the solution reports how
+    ///     far over or under that exposes.
     ///   - compensation: Stops to add to the meter's exposure; positive brightens.
-    public static func solve(_ settings: ExposureSettings, meteredEV100: Double?, compensation: Double = 0) -> ExposureSolution {
+    public static func solve(_ settings: ExposureSettings, meteredEV100: Double?, limits: ExposureLimits? = nil,
+                             compensation: Double = 0) -> ExposureSolution {
         var solution = ExposureSolution(isoIndex: settings.isoIndex, apertureIndex: settings.apertureIndex,
                                         shutterIndex: settings.shutterIndex, meteredAxis: nil,
                                         meteredValueIsOffScale: false)
@@ -295,24 +313,32 @@ public enum ExposureSolver {
             // t = N² · 100 / (S · 2^EV)
             let n = ExposureScale.aperture(settings.apertureIndex)
             let seconds = n * n * 100 / (iso * pow(2, target))
-            let (index, offScale) = snap(ExposureScale.shutterIndex(forSeconds: seconds), .shutter)
+            let needed = ExposureScale.shutterIndex(forSeconds: seconds)
+            let (index, offScale) = snap(needed, .shutter, within: limits?.shutter)
             solution.shutterIndex = index
             solution.meteredAxis = .shutter
             solution.meteredValueIsOffScale = offScale
+            // A longer shutter (higher index) lets in more light.
+            solution.exposureError = limits == nil ? 0 : (Double(index) - needed) / 3
         case .shutterPriority:
             // N² = t · 2^EV · S / 100
             let t = ExposureScale.shutter(settings.shutterIndex)
             let n = (t * pow(2, target) * iso / 100).squareRoot()
-            let (index, offScale) = snap(ExposureScale.apertureIndex(forFNumber: n), .aperture)
+            let needed = ExposureScale.apertureIndex(forFNumber: n)
+            let (index, offScale) = snap(needed, .aperture, within: limits?.aperture)
             solution.apertureIndex = index
             solution.meteredAxis = .aperture
             solution.meteredValueIsOffScale = offScale
+            // A smaller aperture (higher index) lets in less light.
+            solution.exposureError = limits == nil ? 0 : (needed - Double(index)) / 3
         }
         return solution
     }
 
-    private static func snap(_ fractionalIndex: Double, _ axis: ExposureAxis) -> (Int, Bool) {
-        let range = ExposureScale.range(axis)
+    /// The nearest scale index, held within `limits` (else the scale), and whether it had to be held.
+    private static func snap(_ fractionalIndex: Double, _ axis: ExposureAxis,
+                             within limits: ClosedRange<Int>?) -> (Int, Bool) {
+        let range = limits ?? ExposureScale.range(axis)
         let rounded = Int(fractionalIndex.rounded())
         let clamped = min(max(rounded, range.lowerBound), range.upperBound)
         return (clamped, clamped != rounded)

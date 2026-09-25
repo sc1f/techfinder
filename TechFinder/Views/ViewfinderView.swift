@@ -70,7 +70,7 @@ struct ViewfinderView: View {
 
     var body: some View {
         let solution = self.solution
-        let exposure = ExposureSolver.solve(library.exposure, meteredEV100: meteredEV)
+        let exposure = ExposureSolver.solve(library.exposure, meteredEV100: meteredEV, limits: library.exposureLimits)
         let movement = movementInfo(exposure: exposure, solution: solution)
         let zoom = movement?.layout.zoom ?? solution?.zoom ?? 1
         feedback(presentations(lifecycle(screen(solution: solution, exposure: exposure, movement: movement),
@@ -215,6 +215,7 @@ struct ViewfinderView: View {
             // Over the image but outside its gestures, so the buttons are hit and reported where they are.
             ImageNotices(rotation: orientation.rotation, size: imageRect.size,
                          isTooWide: isTooWide(solution: solution, movement: movement),
+                         exposureWarning: exposureWarning,
                          lensName: lensNotice?.name, undo: undoText,
                          performUndo: performUndo,
                          zoom: abs(fill - Framing.defaultFill) > 0.001 ? fill / Framing.defaultFill : nil,
@@ -225,12 +226,23 @@ struct ViewfinderView: View {
         .gesture(pinchToAdjustFill)
     }
 
+    /// "Underexposed 2⅓ stops" when the light needs more than the equipment's limits allow.
+    private var exposureWarning: String? {
+        let error = ExposureSolver.solve(library.exposure, meteredEV100: meteredEV, limits: library.exposureLimits).exposureError
+        let thirds = Int((abs(error) * 3).rounded())
+        guard thirds > 0 else { return nil }
+        let whole = thirds / 3
+        let fraction = ["", "⅓", "⅔"][thirds % 3]
+        let amount = whole > 0 ? "\(whole)\(fraction)" : fraction
+        return "\(error < 0 ? "Underexposed" : "Overexposed") \(amount) \(thirds == 3 ? "stop" : "stops")"
+    }
+
     private var undoText: String? {
         undoableReset.map { "\($0.axis == .rise ? "Rise" : "Shift") reset to 0" }
     }
 
     private func performUndo() {
-        let exposure = ExposureSolver.solve(library.exposure, meteredEV100: meteredEV)
+        let exposure = ExposureSolver.solve(library.exposure, meteredEV100: meteredEV, limits: library.exposureLimits)
         guard let reset = undoableReset, let movement = movementInfo(exposure: exposure, solution: solution) else { return }
         movements.axis = reset.axis
         move(reset.axis, to: reset.value, info: movement)
@@ -376,6 +388,12 @@ struct ViewfinderView: View {
                 if !isOn { movementsCameraIsWide = false }
             }
             .onChange(of: library.selectedLensID) { movementsCameraIsWide = false }
+            .onChange(of: library.exposureLimits, initial: true) { _, limits in
+                // Values set by hand stay within the limits, also when the limits change.
+                var exposure = library.exposure
+                exposure.clamp(to: limits)
+                if exposure != library.exposure { library.exposure = exposure }
+            }
             .task(id: cameraSwitch) {
                 guard cameraSwitch != nil else { return }
                 try? await Task.sleep(for: .seconds(0.45))
@@ -614,6 +632,8 @@ private struct ImageNotices: View {
     let size: CGSize
     /// Shows "Wider than the iPhone can see".
     let isTooWide: Bool
+    /// Over- or underexposure when the meter is held at the equipment's limits.
+    let exposureWarning: String?
     let lensName: String?
     let undo: String?
     let performUndo: () -> Void
@@ -627,6 +647,11 @@ private struct ImageNotices: View {
             if isTooWide {
                 WarningTag()
                     .transition(.opacity)
+            }
+            if let exposureWarning {
+                WarningTag(text: exposureWarning)
+                    .transition(.opacity)
+                    .accessibilityIdentifier("exposureWarning")
             }
             if let lensName {
                 Text(lensName)
@@ -680,6 +705,7 @@ private struct ImageNotices: View {
         .frame(width: size.width, height: size.height)
         .animation(.smooth(duration: 0.25), value: zoom == nil)
         .animation(.smooth(duration: 0.25), value: isTooWide)
+        .animation(.smooth(duration: 0.25), value: exposureWarning)
     }
 }
 
@@ -749,9 +775,10 @@ private struct ToolRow: View {
 /// Shown over the image when the setup, or the moved frame, is wider than the phone's camera can see.
 private struct WarningTag: View {
     static let height: CGFloat = 22
+    var text = "Wider than the iPhone can see"
 
     var body: some View {
-        Text("Wider than the iPhone can see")
+        Text(text)
             .font(.caption2.weight(.semibold))
             .foregroundStyle(.orange)
             .padding(.horizontal, 12)

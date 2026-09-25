@@ -198,6 +198,35 @@ final class ExposureTests: XCTestCase {
         XCTAssertEqual(ExposureScale.label(.aperture, settings.apertureIndex), "f/18")
     }
 
+    /// Too dark for the gear: the meter stops at the slowest shutter and reports the underexposure.
+    func testMeterStopsAtTheLimitsAndReportsTheError() {
+        var settings = ExposureSettings.default // ISO 100, f/8, aperture priority
+        settings.isoIndex = 18 // ISO 400
+        let limits = ExposureLimits.default // 1/500 to 60 s
+        // f/8 at ISO 400: EV 2.5 needs about 3 s; EV −6 needs about 17 minutes, 4 stops past 60 s.
+        let fine = ExposureSolver.solve(settings, meteredEV100: 2.5, limits: limits)
+        XCTAssertEqual(fine.exposureError, 0, accuracy: 0.34)
+        let dark = ExposureSolver.solve(settings, meteredEV100: -6, limits: limits)
+        XCTAssertEqual(dark.shutterIndex, limits.shutter.upperBound, "Stops at the slowest shutter")
+        XCTAssertLessThan(dark.exposureError, -3, "Underexposed by several stops")
+        let bright = ExposureSolver.solve(settings, meteredEV100: 20, limits: limits)
+        XCTAssertEqual(bright.shutterIndex, limits.shutter.lowerBound, "Stops at the fastest shutter")
+        XCTAssertGreaterThan(bright.exposureError, 1, "Overexposed")
+
+        // Shutter set by hand: the aperture stops at f/32 and it's overexposed in bright light.
+        settings.set(.shutter, to: 39) // 1 s
+        let stoppedDown = ExposureSolver.solve(settings, meteredEV100: 15, limits: limits)
+        XCTAssertEqual(stoppedDown.apertureIndex, limits.aperture.upperBound)
+        XCTAssertGreaterThan(stoppedDown.exposureError, 1)
+    }
+
+    func testValuesSetByHandStayWithinTheLimits() {
+        var settings = ExposureSettings(isoIndex: 40, apertureIndex: 18, shutterIndex: 70, mode: .shutterPriority)
+        settings.clamp(to: .default)
+        XCTAssertEqual(settings.isoIndex, ExposureLimits.default.iso.upperBound)
+        XCTAssertEqual(settings.shutterIndex, ExposureLimits.default.shutter.upperBound)
+    }
+
     func testChangingToWholeStopsSnapsTheLimits() {
         let store = LibraryStore(fileURL: nil)
         store.meterStep = 1

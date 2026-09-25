@@ -47,7 +47,7 @@ struct MeterBar: View {
     }
 
     private func dial(_ axis: ExposureAxis, caption: String) -> some View {
-        let range = ExposureScale.range(axis)
+        let limit = limits.range(axis)
         let index = solution.index(axis)
         let isMetered = settings.meteredAxis == axis
         let badge: MeterDial.Badge? = settings.lockedAxis == axis ? .locked : (isMetered ? .metered : nil)
@@ -59,13 +59,19 @@ struct MeterBar: View {
             // The metered value is unknown until the first light reading.
             value: isMetered && ev100 == nil ? "—" : solution.label(axis),
             badge: badge,
-            isWarning: solution.isOutsideLimits(axis, limits) || (isMetered && readingIsClipped),
-            canLower: direction > 0 ? index > range.lowerBound : index < range.upperBound,
-            canRaise: direction > 0 ? index < range.upperBound : index > range.lowerBound,
-            change: { steps in settings.step(axis, by: steps * direction, thirdsPerStep: step, from: solution) },
+            // The metered value held at a limit, over- or underexposing, is a warning too.
+            isWarning: solution.isOutsideLimits(axis, limits)
+                || (isMetered && (readingIsClipped || abs(solution.exposureError) > 1.0 / 6)),
+            // Values set by hand stay within the equipment's limits.
+            canLower: direction > 0 ? index > limit.lowerBound : index < limit.upperBound,
+            canRaise: direction > 0 ? index < limit.upperBound : index > limit.lowerBound,
+            change: { steps in
+                settings.step(axis, by: steps * direction, thirdsPerStep: step, from: solution)
+                settings.clamp(to: limits)
+            },
             choices: choices(axis, current: index),
             selectedChoice: index,
-            select: { settings.set(axis, to: $0) },
+            select: { settings.set(axis, to: $0); settings.clamp(to: limits) },
             rotation: rotation
         )
         .accessibilityIdentifier("meter-\(axis.rawValue)")

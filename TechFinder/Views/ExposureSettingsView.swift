@@ -93,7 +93,7 @@ struct ExposureSettingsView: View {
         } header: {
             Text(title)
         } footer: {
-            Text("\(footer) Metered values outside these limits turn orange.")
+            Text("\(footer) Settings stay within these limits; when the light needs more, the meter warns of over- or underexposure.")
         }
         .pickerStyle(.menu)
         .monospacedDigit()

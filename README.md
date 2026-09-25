@@ -17,7 +17,8 @@ A minimal iPhone viewfinder for technical-camera photographers. Choose a lens an
 - **Spot meter.**
   - The meter reads a 3° spot, drawn as a circle at the centre cross (the moved frame's centre with movements on). It converts the spot's brightness to EV at ISO 100 using the camera's exposure, so a mid-grey spot reads correct.
   - The ISO pill shows the live reading as EV at ISO 100. To calibrate, meter a grey card with a handheld spot meter and set any consistent difference in Settings › Calibration.
-  - A metered value turns orange with a warning sign if most of the spot is clipped white; so does any value outside your limits.
+  - Values you set stay within the limits in Settings: the arrows and swipes stop there, and the lists only offer values inside them. The metered value stops at the limits too; when the light needs more than they allow, it turns orange with a warning sign and a notice over the image says how far off the exposure is, such as "Underexposed 2⅓ stops".
+  - A metered value also turns orange with a warning sign if most of the spot is clipped white.
   - The first time, a label names the spot circle.
 - **Controls.**
   - All the controls sit below the camera image, within thumb reach, sharing out the space evenly. From the top down: the meter, the lens selector on its own (or the movement controls in its place, with Movements on), and a row of round buttons with labels.

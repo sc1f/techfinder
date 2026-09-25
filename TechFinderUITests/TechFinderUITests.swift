@@ -218,6 +218,31 @@ final class TechFinderUITests: XCTestCase {
         XCTAssertEqual(iso.value as? String, "800")
     }
 
+    /// The meter stops at the equipment's limits and reports the exposure error instead of an f-number
+    /// the lenses don't have. The Simulator's light reads EV 12.
+    func testMeterStopsAtTheLimitsWithAnExposureWarning() throws {
+        let app = XCUIApplication.fresh()
+        app.launch()
+        let shutter = app.otherElements["meter-shutter"].firstMatch
+        let aperture = app.otherElements["meter-aperture"].firstMatch
+        XCTAssertTrue(shutter.waitForExistence(timeout: 15))
+
+        // Slow the shutter to 1 s (left is slower); at EV 12 and ISO 100 that needs f/64.
+        let slower = shutter.coordinate(withNormalizedOffset: CGVector(dx: 0.07, dy: 0.5))
+        for _ in 0..<6 { slower.tap() }
+        XCTAssertEqual(shutter.value as? String, "1\"")
+        XCTAssertEqual(aperture.value as? String, "f/32", "The metered aperture stops at the smallest limit")
+        attachScreenshot(of: app, named: "exposure-warning")
+
+        // iOS 26 leaves glass-only notices out of the accessibility tree (see the screenshot).
+        let warning = app.descendants(matching: .any)["exposureWarning"]
+        if warning.waitForExistence(timeout: 2) {
+            XCTAssertTrue(warning.label.hasPrefix("Overexposed 2 stops"), warning.label)
+        } else if #unavailable(iOS 26) {
+            XCTFail("The overexposure warning shows")
+        }
+    }
+
     /// Held sideways, the meter pills stay put and stand upright to the viewer, shutter at the top, and
     /// their lists open turned to read upright.
     func testLandscapeMeterTurnsInPlace() {

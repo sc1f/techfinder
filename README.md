@@ -20,8 +20,8 @@ A minimal iPhone viewfinder for technical-camera photographers. Choose a lens an
   - A metered value turns orange with a warning sign if most of the spot is clipped white; so does any value outside your limits.
   - The first time, a label names the spot circle.
 - **Controls.**
-  - All the controls sit below the camera image, within thumb reach, sharing out the space evenly. From the top down: a row of round buttons, the meter, and the lens selector on its own (or the movement controls, with Movements on).
-  - The labelled buttons, left to right: Settings, Frame (sensor or film format), Lenses (add, edit and choose lenses), Movements and Grid. Settings sets the ISO, aperture and shutter limits of your equipment; values outside them turn orange.
+  - All the controls sit below the camera image, within thumb reach, sharing out the space evenly. From the top down: the meter, the lens selector on its own (or the movement controls in its place, with Movements on), and a row of round buttons with labels.
+  - The buttons, left to right: Settings, Frame (sensor or film format), Lenses (add, edit and choose lenses), Movements and Grid. Settings sets the ISO, aperture and shutter limits of your equipment; values outside them turn orange.
   - The controls never cover the camera image, which sits at the top and never moves or resizes. With Movements on, the movement controls take the lens selector's place (the Lenses button still opens the library), so nothing else shifts. On a short screen such as the iPhone SE, the image is a little smaller to leave the controls room.
   - When the camera zooms (a new lens, or turning on movements), the picture follows the camera's actual zoom, so the scene holds still under the frame.
   - The lens selector is the system segmented control. On iOS 26, pressing or dragging lifts a clear glass lens that magnifies the lenses beneath it, as in the Photos app. The numbers turn with the phone without the control changing size. Its labels drop "mm" when that is what it takes to fit (up to about eight lenses); with more lenses than fit, it becomes a sliding row like the Camera app's mode switcher.

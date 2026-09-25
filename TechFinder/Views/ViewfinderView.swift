@@ -214,8 +214,8 @@ struct ViewfinderView: View {
         withAnimation(.smooth(duration: 0.2)) { undoableReset = nil }
     }
 
-    /// Everything sits below the camera image, within thumb reach, sharing out the band evenly: the
-    /// movement controls (or a warning), the buttons, the meter, and the lens selector at the bottom.
+    /// Everything sits below the camera image, within thumb reach, sharing out the band evenly: the meter,
+    /// the lens selector (or the movement controls in its place), and the labelled buttons at the bottom.
     /// Held sideways everything stays put with its icons and text turned, except the movement controls,
     /// which move to `sideBlocks`.
     private func controls(solution: FramingSolution?, exposure: ExposureSolution, movement: MovementInfo?) -> some View {
@@ -224,9 +224,6 @@ struct ViewfinderView: View {
             let bandTop = image.maxY + ScreenLayout.gap
             VStack(spacing: 0) {
                 Spacer(minLength: 0)
-                ToolRow(rotation: orientation.rotation, showsGrid: $showsGrid, showsMovements: movementsToggle,
-                        present: present)
-                Spacer(minLength: Self.rowSpacing)
                 MeterBar(settings: exposureSettings, solution: exposure, limits: library.exposureLimits,
                          ev100: meteredEV, readingIsClipped: camera.meterIsClipped, step: library.meterStep,
                          rotation: orientation.rotation)
@@ -243,6 +240,9 @@ struct ViewfinderView: View {
                     }
                 }
                 .frame(height: GlassButtonMetrics.pillHeight)
+                Spacer(minLength: Self.rowSpacing)
+                ToolRow(rotation: orientation.rotation, showsGrid: $showsGrid, showsMovements: movementsToggle,
+                        present: present)
                 Spacer(minLength: 8)
             }
             .padding(.horizontal, 16)

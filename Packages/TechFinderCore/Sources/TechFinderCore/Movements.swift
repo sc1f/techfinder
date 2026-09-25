@@ -268,6 +268,23 @@ public enum MovementPlanner {
         }
     }
 
+    /// The tightest phone camera zoom that keeps the frame in view for every rise and shift the image
+    /// circle and the camera's limits allow, with a small margin, and no tighter than `framingZoom` (the
+    /// frame's zoom without movements). Chosen once, so the camera never has to change mid-movement.
+    public static func coverageZoom(format: CaptureFormat, focalLength f: Double, imageCircle: Double?,
+                                    limits: MovementLimits, turnedLeft: Bool?, optics: CameraOptics,
+                                    framingZoom: Double, margin: Double = 0.95) -> Double {
+        let geometry = MovementGeometry(format: format, riseAlongLongSide: turnedLeft == nil)
+        let rise = geometry.maximum(.rise, other: 0, imageCircle: imageCircle, limits: limits) / f
+        let shift = geometry.maximum(.shift, other: 0, imageCircle: imageCircle, limits: limits) / f
+        let directions = screenDirections(sideways: turnedLeft)
+        // The frame's furthest reach across and along the screen, one axis moved at a time.
+        let reachX = format.shortSide / 2 / f + max(abs(directions.rise.x) * rise, abs(directions.shift.x) * shift)
+        let reachY = format.longSide / 2 / f + max(abs(directions.rise.y) * rise, abs(directions.shift.y) * shift)
+        let fits = margin * min(optics.tanHalfShort / reachX, optics.tanHalfLong / reachY)
+        return min(max(fits, optics.minZoom), framingZoom, optics.maxZoom)
+    }
+
     public static func layout(format: CaptureFormat, focalLength: Double, movement: Movement,
                               imageCircle diameter: Double?, limits: MovementLimits, turnedLeft: Bool?,
                               optics: CameraOptics, fill: Double = 0.92) -> MovementLayout {

@@ -32,8 +32,6 @@ struct ViewfinderView: View {
     /// What the camera is framing for: movements, the lens and the format. A change is a switch, which
     /// jumps the zoom under a blur, rather than a ramp.
     @State private var framingKey: String?
-    /// Movements widened the camera to the whole image circle; it stays wide until they turn off.
-    @State private var movementsCameraIsWide = false
     @State private var cameraSwitch: UUID?
     private var isSwitchingCamera: Bool { cameraSwitch != nil }
     @State private var showsSpotHint = false
@@ -66,8 +64,6 @@ struct ViewfinderView: View {
         /// Room between the furthest corner and the image circle edge, in mm.
         var margin: Double? { imageCircle.map { geometry.margin(movement, imageCircle: $0.diameter) } }
         var movement: Movement
-        /// The moved frame is nearing the edge of what the camera sees at the frame's own zoom.
-        var needsWiderCamera: Bool
     }
 
     var body: some View {
@@ -76,12 +72,11 @@ struct ViewfinderView: View {
         let movement = movementInfo(exposure: exposure, solution: solution)
         let zoom = movement?.layout.zoom ?? solution?.zoom ?? 1
         feedback(presentations(lifecycle(screen(solution: solution, exposure: exposure, movement: movement),
-                                         zoom: zoom, needsWiderCamera: movement?.needsWiderCamera == true)))
+                                         zoom: zoom)))
     }
 
-    /// The camera keeps the frame's zoom when movements turn on, so nothing changes at zero. It widens
-    /// to fit the whole image circle, once, when the moved frame nears the edge of what it sees or the
-    /// overview opens, and stays wide until movements turn off.
+    /// With movements on, the camera zooms out only as far as the frame can travel (set once, under the
+    /// switch blur), so it never changes mid-movement; the overview fits the whole image circle.
     private func movementInfo(exposure: ExposureSolution, solution: FramingSolution?) -> MovementInfo? {
         guard movements.isOn, let lens = library.selectedLens else { return nil }
         // Use the lens's quoted figure at the aperture closest to the meter's.
@@ -93,12 +88,17 @@ struct ViewfinderView: View {
                                             movement: movements.movement, imageCircle: imageCircle?.diameter,
                                             limits: library.movementLimits, turnedLeft: turnedLeft,
                                             optics: camera.optics)
-        let atFramingZoom = solution.map { layout.withCamera(zoom: $0.zoom, optics: camera.optics) }
-        let needsWider = atFramingZoom.map { !$0.frameFitsCamera() } ?? true
-        let isWide = movements.showsOverview || movementsCameraIsWide || needsWider
-        return MovementInfo(layout: isWide ? layout : atFramingZoom ?? layout, geometry: geometry,
+        // The overview fits the whole image circle; the result view uses the tightest zoom that keeps
+        // the frame in view for every movement, set once as movements turn on.
+        let coverage = solution.map {
+            MovementPlanner.coverageZoom(format: library.selectedFormat, focalLength: lens.focalLength,
+                                         imageCircle: imageCircle?.diameter, limits: library.movementLimits,
+                                         turnedLeft: turnedLeft, optics: camera.optics, framingZoom: $0.zoom)
+        }
+        let resultLayout = coverage.map { layout.withCamera(zoom: $0, optics: camera.optics) } ?? layout
+        return MovementInfo(layout: movements.showsOverview ? layout : resultLayout, geometry: geometry,
                             imageCircle: imageCircle, aperture: aperture, focalLength: lens.focalLength,
-                            movement: movements.movement, needsWiderCamera: needsWider)
+                            movement: movements.movement)
     }
 
     /// Nil when upright; whether the phone's top points left when sideways.
@@ -353,7 +353,7 @@ struct ViewfinderView: View {
 
     // MARK: - Behaviour
 
-    private func lifecycle(_ content: some View, zoom: Double, needsWiderCamera: Bool) -> some View {
+    private func lifecycle(_ content: some View, zoom: Double) -> some View {
         content
             .animation(Self.turn, value: orientation.hold)
             .statusBarHidden()
@@ -389,8 +389,7 @@ struct ViewfinderView: View {
                 hasSeenSpotHint = true
             }
             .onChange(of: zoom, initial: true) { oldZoom, zoom in
-                let isWide = movements.showsOverview || movementsCameraIsWide
-                let key = "\(movements.isOn) \(isWide) \(library.selectedLensID?.uuidString ?? "") \(library.selectedFormatID)"
+                let key = "\(movements.isOn) \(movements.showsOverview) \(orientation.hold) \(library.selectedLensID?.uuidString ?? "") \(library.selectedFormatID)"
                 // A pinch never changes the key, and a switch that barely moves the zoom needs no cover.
                 let isSwitch = framingKey != nil && framingKey != key && abs(log(zoom / oldZoom)) > 0.05
                 framingKey = key
@@ -401,19 +400,6 @@ struct ViewfinderView: View {
                     coverSwitch()
                 }
                 camera.setZoom(zoom, immediately: isSwitch)
-            }
-            .onChange(of: needsWiderCamera) { _, needsWider in
-                if needsWider { movementsCameraIsWide = true }
-            }
-            .onChange(of: movements.isOn) { _, isOn in
-                if !isOn { movementsCameraIsWide = false }
-            }
-            .onChange(of: library.selectedLensID) { movementsCameraIsWide = false }
-            .onChange(of: library.exposureLimits, initial: true) { _, limits in
-                // Values set by hand stay within the limits, also when the limits change.
-                var exposure = library.exposure
-                exposure.clamp(to: limits)
-                if exposure != library.exposure { library.exposure = exposure }
             }
             .task(id: cameraSwitch) {
                 guard cameraSwitch != nil else { return }

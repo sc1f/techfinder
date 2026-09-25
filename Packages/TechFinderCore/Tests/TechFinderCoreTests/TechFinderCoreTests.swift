@@ -464,6 +464,30 @@ final class MovementTests: XCTestCase {
         XCTAssertFalse(layout(rise: 15).frameFitsCamera())
     }
 
+    /// At the coverage zoom the frame stays in view at the furthest rise and shift, yet the camera is
+    /// tighter than fitting the whole image circle.
+    func testCoverageZoomKeepsEveryMovementInView() {
+        let optics = CameraOptics(horizontalFieldOfView: 108.3, aspectRatio: 4.0 / 3.0, minZoom: 1, maxZoom: 15)
+        let format = CaptureFormat(id: "44", name: "44×33", width: 43.8, height: 32.9, category: .digitalBack)
+        for (focalLength, circle) in [(40.0, 90.0), (80, 90), (80, 120)] {
+            let framing = Framing.solve(focalLength: focalLength, format: format, optics: optics, fill: Framing.defaultFill)
+            let zoom = MovementPlanner.coverageZoom(format: format, focalLength: focalLength, imageCircle: circle,
+                                                   limits: .default, turnedLeft: nil, optics: optics,
+                                                   framingZoom: framing.zoom)
+            XCTAssertLessThanOrEqual(zoom, framing.zoom)
+            let geometry = MovementGeometry(format: format, riseAlongLongSide: true)
+            let rise = geometry.maximum(.rise, other: 0, imageCircle: circle, limits: .default)
+            let shift = geometry.maximum(.shift, other: 0, imageCircle: circle, limits: .default)
+            for movement in [Movement(rise: rise, shift: 0), Movement(rise: -rise, shift: 0),
+                             Movement(rise: 0, shift: shift), Movement(rise: 0, shift: -shift)] {
+                let layout = MovementPlanner.layout(format: format, focalLength: focalLength, movement: movement,
+                                                    imageCircle: circle, limits: .default, turnedLeft: nil,
+                                                    optics: optics).withCamera(zoom: zoom, optics: optics)
+                XCTAssertTrue(layout.frameFitsCamera(fraction: 0.96), "\(focalLength) mm, \(movement)")
+            }
+        }
+    }
+
     // MARK: - Screen layout
 
     /// Portrait screens in points with their top and bottom safe areas: every screen size iOS 17+ runs on.

@@ -94,18 +94,19 @@ jobs:
             if [ "$(echo "$cpu / 3 > 80" | bc)" = 1 ]; then echo "::error::TechFinder looks hung ($name)"; failed=1; fi
             xcrun simctl io "$SIMULATOR_UDID" screenshot "$RUNNER_TEMP/screens/$name.png" >/dev/null
           }
-          shoot 1-viewfinder
-          shoot 2-lenses -TFPresent lenses
-          shoot 3-landscape-left -TFSimulateHold landscapeLeft
-          shoot 4-landscape-right-formats -TFSimulateHold landscapeRight -TFPresent formats
-          shoot 5-movements-result -TFImageCircle 90 -TFMovements YES -TFRise 8 -TFShift 4 -TFOverview NO
-          shoot 6-movements-overview -TFImageCircle 90 -TFMovements YES -TFRise 8 -TFShift 4 -TFOverview YES
+          shoot 0-welcome -hasSeenWelcome NO
+          shoot 1-viewfinder -hasSeenWelcome YES
+          shoot 2-lenses -hasSeenWelcome YES -TFPresent lenses
+          shoot 3-landscape-left -hasSeenWelcome YES -TFSimulateHold landscapeLeft
+          shoot 4-landscape-right-formats -hasSeenWelcome YES -TFSimulateHold landscapeRight -TFPresent formats
+          shoot 5-movements-result -hasSeenWelcome YES -TFImageCircle 90 -TFMovements YES -TFRise 8 -TFShift 4 -TFOverview NO
+          shoot 6-movements-overview -hasSeenWelcome YES -TFImageCircle 90 -TFMovements YES -TFRise 8 -TFShift 4 -TFOverview YES
 
           # A recording of the interface turning (portrait → left → portrait → right every 2 s), to check
           # rotation animations frame by frame.
           xcrun simctl terminate "$SIMULATOR_UDID" com.scif.TechFinder 2>/dev/null || true
           xcrun simctl launch "$SIMULATOR_UDID" com.scif.TechFinder -TFSimulateHold cycle -TFFreshLibrary YES \
-            -TFLenses 28,40,65,80,150 >/dev/null
+            -TFLenses 28,40,65,80,150 -hasSeenWelcome YES >/dev/null
           sleep 3
           xcrun simctl io "$SIMULATOR_UDID" recordVideo --codec=h264 --force "$RUNNER_TEMP/screens/rotation.mp4" &
           recorder=$!

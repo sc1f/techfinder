@@ -88,6 +88,20 @@ struct ExposureSettingsView: View {
                     .disabled(library.exposureLimits == .default && library.movementLimits == .default
                               && library.meterCalibration == 0)
                 }
+
+                Section {
+                    LabeledContent("Version", value: Self.version)
+                    Link(destination: URL(string: "https://github.com/sc1f/techfinder/blob/main/PRIVACY.md")!) {
+                        Label("Privacy Policy", systemImage: "hand.raised")
+                    }
+                    Link(destination: URL(string: "https://github.com/sc1f/techfinder/issues")!) {
+                        Label("Support and Feedback", systemImage: "questionmark.bubble")
+                    }
+                } header: {
+                    Text("About")
+                } footer: {
+                    Text("TechFinder collects no data. The camera image never leaves your iPhone.")
+                }
             }
             .navigationTitle("Settings")
             .navigationBarTitleDisplayMode(.inline)
@@ -97,6 +111,14 @@ struct ExposureSettingsView: View {
                 }
             }
         }
+    }
+
+    /// "1.0.0 (12)".
+    private static var version: String {
+        let info = Bundle.main.infoDictionary
+        let short = info?["CFBundleShortVersionString"] as? String ?? "?"
+        let build = info?["CFBundleVersion"] as? String ?? "?"
+        return "\(short) (\(build))"
     }
 
     private func close() {

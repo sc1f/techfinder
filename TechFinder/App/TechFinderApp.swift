@@ -18,8 +18,9 @@ struct TechFinderApp: App {
         #if DEBUG
         // UI tests start from the starter kit every time, without touching saved data.
         if UserDefaults.standard.bool(forKey: "TFFreshLibrary") {
-            // Viewfinder settings start fresh too.
+            // Viewfinder settings start fresh too, past the welcome unless `-TFWelcome YES`.
             for key in ["frameFill", "showsGrid"] { UserDefaults.standard.removeObject(forKey: key) }
+            UserDefaults.standard.set(!UserDefaults.standard.bool(forKey: "TFWelcome"), forKey: "hasSeenWelcome")
             let library = LibraryStore(fileURL: nil)
             // `-TFLenses 28,40,65,80,150` replaces the starter lenses.
             if let list = UserDefaults.standard.string(forKey: "TFLenses") {

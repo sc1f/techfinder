@@ -429,6 +429,21 @@ final class TechFinderUITests: XCTestCase {
         XCTAssertTrue(fifty.isSelected, "The selected lens is unchanged")
     }
 
+    /// First launch: one welcome screen, then the viewfinder, or the format picker straight away.
+    func testWelcomeOnFirstLaunch() {
+        let app = XCUIApplication.fresh()
+        app.launchArguments += ["-TFWelcome", "YES"]
+        app.launch()
+        let choose = app.buttons["welcomeChooseFormat"]
+        XCTAssertTrue(choose.waitForExistence(timeout: 15), "The welcome shows on first launch")
+        attachScreenshot(of: app, named: "welcome")
+        choose.tap()
+        XCTAssertTrue(app.navigationBars["Format"].waitForExistence(timeout: 5), "Choose Your Format opens the formats")
+        app.buttons["Done"].firstMatch.tap()
+        XCTAssertFalse(choose.exists, "The welcome is gone")
+        XCTAssertTrue(app.otherElements["meter-iso"].firstMatch.waitForExistence(timeout: 5))
+    }
+
     private func openLensLibrary(_ app: XCUIApplication) {
         let settings = app.buttons["settingsButton"]
         XCTAssertTrue(settings.waitForExistence(timeout: 15))

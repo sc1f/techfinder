@@ -14,6 +14,7 @@
 		342B98B3F84D5FBD6A50BC15 /* TechFinderApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = F3F660CB7BFF36E60939F0C2 /* TechFinderApp.swift */; };
 		3560A88ABB5C70959F0CFCDA /* SpotMeter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1F10372A0984EC5D2A4EB867 /* SpotMeter.swift */; };
 		365226B08C393ABE6A2F38F4 /* Glass.swift in Sources */ = {isa = PBXBuildFile; fileRef = D9EFA09D3DA46F09C9F7A554 /* Glass.swift */; };
+		38E0280DC8B40D0C8513F43A /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = E15913D896728C6D08A75B89 /* PrivacyInfo.xcprivacy */; };
 		3A79900073753C118C549C2B /* DeviceOrientation.swift in Sources */ = {isa = PBXBuildFile; fileRef = 09CCFCD19DD3612784D4ADFB /* DeviceOrientation.swift */; };
 		473396F7A738F65E02D47B64 /* LensLibraryView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA82ECA49E5B783C1C8E31AC /* LensLibraryView.swift */; };
 		4FB64422AD093BBDF061360D /* CameraPreview.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3CC170A9DDCC0F91DDFB4774 /* CameraPreview.swift */; };
@@ -21,6 +22,7 @@
 		65F03837C9302609DCCB73D3 /* MovementViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = B55540A5922F08379AB98F2F /* MovementViews.swift */; };
 		722AA208955D49DB568EBAF9 /* LensEditorView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2E18ADAFB4F9D6E439F6DA7A /* LensEditorView.swift */; };
 		7910D696A199ADEB1C98F76B /* Panel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 21304C25CCE38C75D150A8BA /* Panel.swift */; };
+		9C4BB5B38AD59B7C5DF867DE /* WelcomeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F448DAF5D7B1AD8092587113 /* WelcomeView.swift */; };
 		A455BD4325EFA0B04B1C5CEA /* TechFinderUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 88B498D23DAE3B126152E901 /* TechFinderUITests.swift */; };
 		A53B642B1937F3BBE6264916 /* FrameOverlay.swift in Sources */ = {isa = PBXBuildFile; fileRef = 02E1E7C2C26E92316167533B /* FrameOverlay.swift */; };
 		AAC9585F0B64FD37B3E03AE2 /* TechFinderCore in Frameworks */ = {isa = PBXBuildFile; productRef = 4F3ADE5F9F9EBD2B68FDE251 /* TechFinderCore */; };
@@ -64,7 +66,9 @@
 		D8236BA655A2C43493EB68C3 /* SimulatedScene.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SimulatedScene.swift; sourceTree = "<group>"; };
 		D9EFA09D3DA46F09C9F7A554 /* Glass.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Glass.swift; sourceTree = "<group>"; };
 		E09D803D8353957C1187B2EC /* TechFinderUITests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = TechFinderUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		E15913D896728C6D08A75B89 /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
 		F3F660CB7BFF36E60939F0C2 /* TechFinderApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TechFinderApp.swift; sourceTree = "<group>"; };
+		F448DAF5D7B1AD8092587113 /* WelcomeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WelcomeView.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -129,6 +133,7 @@
 				B55540A5922F08379AB98F2F /* MovementViews.swift */,
 				D8236BA655A2C43493EB68C3 /* SimulatedScene.swift */,
 				A3969A99DBD2AE10EC4C29A0 /* ViewfinderView.swift */,
+				F448DAF5D7B1AD8092587113 /* WelcomeView.swift */,
 			);
 			path = Views;
 			sourceTree = "<group>";
@@ -177,6 +182,7 @@
 			isa = PBXGroup;
 			children = (
 				BCC2D6C5BE9D6BD8C43D59B9 /* Assets.xcassets */,
+				E15913D896728C6D08A75B89 /* PrivacyInfo.xcprivacy */,
 			);
 			path = Resources;
 			sourceTree = "<group>";
@@ -271,6 +277,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				2759AE6B710324CF720A06A9 /* Assets.xcassets in Resources */,
+				38E0280DC8B40D0C8513F43A /* PrivacyInfo.xcprivacy in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -299,6 +306,7 @@
 				3560A88ABB5C70959F0CFCDA /* SpotMeter.swift in Sources */,
 				342B98B3F84D5FBD6A50BC15 /* TechFinderApp.swift in Sources */,
 				234909BE59B486AAD437B5EA /* ViewfinderView.swift in Sources */,
+				9C4BB5B38AD59B7C5DF867DE /* WelcomeView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -387,7 +395,7 @@
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
-				MARKETING_VERSION = 0.1.0;
+				MARKETING_VERSION = 1.0.0;
 				MTL_ENABLE_DEBUG_INFO = NO;
 				MTL_FAST_MATH = YES;
 				PRODUCT_NAME = "$(TARGET_NAME)";
@@ -452,7 +460,7 @@
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
-				MARKETING_VERSION = 0.1.0;
+				MARKETING_VERSION = 1.0.0;
 				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
 				MTL_FAST_MATH = YES;
 				ONLY_ACTIVE_ARCH = YES;

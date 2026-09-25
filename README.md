@@ -4,9 +4,10 @@ A minimal iPhone viewfinder for technical-camera photographers. Choose a lens an
 
 **Flow:** open → tap a lens (or change format) → frame the shot.
 
-## Features (MVP)
+## Features
 
 - **Live framing.** The phone camera zooms so the taking frame fills about 85% of the view, and the scene around it is darkened. Pinch to show more or less of the surroundings; a chip on the image shows the frame size (such as 1.3×) until you tap it to return to the standard size. The camera autofocuses at the centre. An optional rule-of-thirds grid sits inside the frame.
+- **First launch.** One welcome screen says what the app does, then offers to choose your format before the camera permission prompt.
 - **Lens library.** Add, edit and delete lenses (focal length plus optional name). Tap a lens to use it; its info button or a long press edits it. Deleting from the editor, and Settings' Reset to Defaults, ask first. Choosing a lens with a name shows the name at the bottom of the image for a moment; warnings and the Undo offer appear there too. The list is sorted wide to long, and the angles of view shown are for the current format.
 - **Formats.** Digital backs are grouped by sensor size with their models listed (53.4 × 40, 53.7 × 40.4, 44 × 33, 45 × 30, 36 × 24). Film covers medium format (6×4.5 to 6×17) and large format (4×5, 5×7, 8×10). You can add custom formats.
 - **Light meter.**
@@ -104,3 +105,7 @@ One-time setup for TestFlight (requires the paid Apple Developer Program):
 ## Later
 
 Tilt and swing, saved scouting photos, a pan-and-stitch mode for setups wider than the iPhone's ultra-wide, and per-device field-of-view calibration.
+
+## Releasing
+
+See [docs/RELEASE.md](docs/RELEASE.md) for the App Store listing, privacy answers, review notes and release steps, and [PRIVACY.md](PRIVACY.md) for the privacy policy.

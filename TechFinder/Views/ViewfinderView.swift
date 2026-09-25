@@ -27,6 +27,8 @@ struct ViewfinderView: View {
     /// The lens nickname shown briefly over the image after choosing a lens.
     @State private var lensNotice: (name: String, id: UUID)?
     @AppStorage("hasSeenSpotHint") private var hasSeenSpotHint = false
+    /// The first-launch welcome has been seen; the camera starts after it.
+    @AppStorage("hasSeenWelcome") private var hasSeenWelcome = false
     /// What the camera is framing for: movements, the lens and the format. A change is a switch, which
     /// jumps the zoom under a blur, rather than a ramp.
     @State private var framingKey: String?
@@ -132,6 +134,14 @@ struct ViewfinderView: View {
                 }
                 .transition(.opacity.combined(with: .scale(scale: 0.96)))
                 .zIndex(1)
+            }
+            if !hasSeenWelcome {
+                WelcomeView { choosingFormat in
+                    withAnimation(.smooth(duration: 0.3)) { hasSeenWelcome = true }
+                    if choosingFormat { present(.formats) }
+                }
+                .transition(.opacity)
+                .zIndex(2)
             }
         }
         .onGeometryChange(for: EdgeInsets.self) { $0.safeAreaInsets } action: { safeArea = $0 }
@@ -411,14 +421,16 @@ struct ViewfinderView: View {
                 guard !Task.isCancelled else { return }
                 withAnimation(.easeOut(duration: 0.25)) { cameraSwitch = nil }
             }
-            .task {
+            .task(id: hasSeenWelcome) {
+                // After the welcome, so the camera permission prompt comes with its reason.
+                guard hasSeenWelcome else { return }
                 await camera.start()
             }
             .onChange(of: scenePhase) { _, phase in
                 switch phase {
                 case .active:
                     UIApplication.shared.isIdleTimerDisabled = true
-                    Task { await camera.start() }
+                    if hasSeenWelcome { Task { await camera.start() } }
                 case .background:
                     UIApplication.shared.isIdleTimerDisabled = false
                     camera.stop()

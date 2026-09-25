@@ -9,7 +9,7 @@ options:
 settings:
   base:
     SWIFT_VERSION: "5.0"
-    MARKETING_VERSION: "0.1.0"
+    MARKETING_VERSION: "1.0.0"
     CURRENT_PROJECT_VERSION: "1"
     # Set your Apple Developer team here (or in Xcode › Signing & Capabilities) to run on an iPhone.
     DEVELOPMENT_TEAM: ""

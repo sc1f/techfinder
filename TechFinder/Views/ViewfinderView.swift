@@ -27,6 +27,11 @@ struct ViewfinderView: View {
     /// The lens nickname shown briefly over the image after choosing a lens.
     @State private var lensNotice: (name: String, id: UUID)?
     @AppStorage("hasSeenSpotHint") private var hasSeenSpotHint = false
+    /// What the camera is framing for: movements, the lens and the format. A change is a switch, which
+    /// jumps the zoom under a blur, rather than a ramp.
+    @State private var framingKey: String?
+    @State private var cameraSwitch: UUID?
+    private var isSwitchingCamera: Bool { cameraSwitch != nil }
     @State private var showsSpotHint = false
 
     enum Sheet: String, Identifiable {
@@ -136,13 +141,19 @@ struct ViewfinderView: View {
                 // One camera image throughout; in movement mode it is magnified and panned to the moved frame.
                 let zoom = movement?.layout.zoom ?? solution?.zoom ?? 1
                 imageLayer(zoom: zoom)
-                    // While the camera ramps to a new zoom, scale its picture by how far it still has to
-                    // go, so the scene stays put under the frame instead of zooming out and back.
-                    .scaleEffect(transform.scale * CGFloat(camera.liveZoom.map { zoom / $0 } ?? 1))
+                    .scaleEffect(transform.scale)
                     .offset(transform.offset)
-                    // Turning movements on changes the camera's zoom; the picture follows the camera
-                    // rather than animating on its own. (The overview toggle, which keeps the zoom, animates.)
+                    // Turning movements on switches the camera's zoom under a brief blur; the picture
+                    // changes with it rather than animating. (The overview toggle, which keeps the zoom,
+                    // animates.)
                     .transaction(value: movements.isOn) { $0.animation = nil }
+                if isSwitchingCamera {
+                    // Like the Camera app changing lenses: blur the picture while the camera settles.
+                    Rectangle()
+                        .fill(.ultraThinMaterial)
+                        .allowsHitTesting(false)
+                        .transition(.opacity)
+                }
                 if let movement, let mapping {
                     MovementOverlay(layout: movement.layout, mapping: mapping, margin: movement.margin,
                                     showsGrid: showsGrid)
@@ -330,8 +341,26 @@ struct ViewfinderView: View {
                 withAnimation(.easeOut(duration: 0.5)) { showsSpotHint = false }
                 hasSeenSpotHint = true
             }
-            .onChange(of: zoom, initial: true) { _, zoom in
-                camera.setZoom(zoom)
+            .onChange(of: zoom, initial: true) { oldZoom, zoom in
+                let key = "\(movements.isOn) \(library.selectedLensID?.uuidString ?? "") \(library.selectedFormatID)"
+                // A pinch never changes the key, and a switch that barely moves the zoom needs no cover.
+                let isSwitch = framingKey != nil && framingKey != key && abs(log(zoom / oldZoom)) > 0.05
+                framingKey = key
+                if isSwitch {
+                    // Straight to the new zoom, which may be another of the phone's cameras, under a blur
+                    // that fades once the picture has settled. Ramping instead shows the camera zooming
+                    // and handing over between lenses.
+                    var instant = Transaction()
+                    instant.disablesAnimations = true
+                    withTransaction(instant) { cameraSwitch = UUID() }
+                }
+                camera.setZoom(zoom, immediately: isSwitch)
+            }
+            .task(id: cameraSwitch) {
+                guard cameraSwitch != nil else { return }
+                try? await Task.sleep(for: .seconds(0.45))
+                guard !Task.isCancelled else { return }
+                withAnimation(.easeOut(duration: 0.25)) { cameraSwitch = nil }
             }
             .task {
                 await camera.start()

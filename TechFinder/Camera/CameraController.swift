@@ -26,8 +26,6 @@ final class CameraController: @unchecked Sendable {
     private(set) var meteredEV: Double?
     /// Most of the metered spot is clipped white, so the reading is too dark.
     private(set) var meterIsClipped = false
-    /// The zoom the camera is at right now, following a ramp as it moves. Nil until the camera is set up.
-    private(set) var liveZoom: Double?
 
     let session = AVCaptureSession()
     private let queue = DispatchQueue(label: "TechFinder.camera")
@@ -37,7 +35,6 @@ final class CameraController: @unchecked Sendable {
     @ObservationIgnored private var requestedZoom: Double = 1
     @ObservationIgnored private var appliedZoom: Double?
     @ObservationIgnored private var runtimeErrorObserver: NSObjectProtocol?
-    @ObservationIgnored private var zoomObservation: NSKeyValueObservation?
     private let meterOutput = AVCaptureVideoDataOutput()
     private let spotMeter = SpotMeter()
     private let meterQueue = DispatchQueue(label: "TechFinder.meter", qos: .userInitiated)
@@ -94,23 +91,25 @@ final class CameraController: @unchecked Sendable {
         }
     }
 
-    /// Applies the zoom factor the framing solution asked for.
-    func setZoom(_ factor: Double) {
+    /// Applies the zoom factor the framing solution asked for: ramped, for pinching and small changes,
+    /// or `immediately` for a switch (movements, a new lens) that the viewfinder covers while it settles.
+    func setZoom(_ factor: Double, immediately: Bool = false) {
         queue.async { [self] in
             requestedZoom = factor
-            applyRequestedZoom()
+            applyRequestedZoom(immediately: immediately)
         }
     }
 
     // MARK: - Configuration (session queue)
 
-    private func applyRequestedZoom() {
+    private func applyRequestedZoom(immediately: Bool = false) {
         guard let device else { return }
         let factor = min(max(CGFloat(requestedZoom), device.minAvailableVideoZoomFactor), device.maxAvailableVideoZoomFactor)
         let isNewFraming = appliedZoom.map { abs($0 - Double(factor)) > 0.001 } ?? true
         do {
             try device.lockForConfiguration()
-            if appliedZoom == nil {
+            if appliedZoom == nil || immediately {
+                // Setting the factor directly also cancels a ramp in progress.
                 device.videoZoomFactor = factor
             } else {
                 // A quick ramp reads as smooth and lets a multi-camera device hand over between lenses mid-move.
@@ -185,10 +184,7 @@ final class CameraController: @unchecked Sendable {
 
         self.device = device
         isConfigured = true
-        zoomObservation = device.observe(\.videoZoomFactor, options: [.initial, .new]) { [weak self] device, _ in
-            let factor = Double(device.videoZoomFactor)
-            DispatchQueue.main.async { self?.liveZoom = factor }
-        }
+
         addSpotMeter(for: device)
 
         applyRequestedZoom()

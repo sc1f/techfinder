@@ -1,12 +1,14 @@
 import SwiftUI
 import TechFinderCore
 
-/// The bottom row: the lens selector on its own, centred and growing outwards as lenses are added, or
-/// an Add Lens button when the library is empty. Its labels turn in place with the phone.
+/// The lens selector, centred and growing outwards as lenses are added, or an Add Lens button when the
+/// library is empty. Its labels turn in place with the phone. A long press opens the lens library.
 struct ControlBar: View {
     @Environment(LibraryStore.self) private var library
     let present: (ViewfinderView.Sheet) -> Void
     let rotation: Angle
+
+    @State private var longPresses = 0
 
     var body: some View {
         Group {
@@ -33,7 +35,15 @@ struct ControlBar: View {
             }
         }
         .frame(maxWidth: .infinity, minHeight: GlassButtonMetrics.pillHeight)
+        // Held still for half a second: a drag across the lenses moves the finger and still selects.
+        .simultaneousGesture(LongPressGesture(minimumDuration: 0.5).onEnded { _ in
+            guard !library.lenses.isEmpty else { return }
+            longPresses += 1
+            present(.lenses)
+        })
+        .sensoryFeedback(.impact(weight: .medium), trigger: longPresses)
         .accessibilityElement(children: .contain)
+        .accessibilityAction(named: "Lens Library") { present(library.lenses.isEmpty ? .newLens : .lenses) }
         .accessibilityIdentifier("lensSelector")
     }
 }

@@ -412,6 +412,17 @@ final class TechFinderUITests: XCTestCase {
         XCTAssertTrue(app.otherElements["lensSelector"].waitForExistence(timeout: 5))
     }
 
+    /// A long press on the lens selector opens the lens library.
+    func testLongPressOnTheLensSelectorOpensTheLibrary() {
+        let app = XCUIApplication.fresh()
+        app.launch()
+        let fifty = app.buttons["HR Digaron-S 50"]
+        XCTAssertTrue(fifty.waitForExistence(timeout: 15))
+        fifty.press(forDuration: 1)
+        XCTAssertTrue(app.navigationBars["Lenses"].waitForExistence(timeout: 5), "A long press opens the library")
+        XCTAssertTrue(fifty.isSelected, "The selected lens is unchanged")
+    }
+
     private func openLensLibrary(_ app: XCUIApplication) {
         let settings = app.buttons["settingsButton"]
         XCTAssertTrue(settings.waitForExistence(timeout: 15))

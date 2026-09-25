@@ -159,13 +159,6 @@ struct ViewfinderView: View {
                     // changes with it rather than animating. (The overview toggle, which keeps the zoom,
                     // animates.)
                     .transaction(value: movements.isOn) { $0.animation = nil }
-                if isSwitchingCamera {
-                    // Like the Camera app changing lenses: blur the picture while the camera settles.
-                    Rectangle()
-                        .fill(.ultraThinMaterial)
-                        .allowsHitTesting(false)
-                        .transition(.opacity)
-                }
                 if let movement, let mapping {
                     MovementOverlay(layout: movement.layout, mapping: mapping, margin: movement.margin,
                                     showsGrid: showsGrid)
@@ -193,6 +186,14 @@ struct ViewfinderView: View {
                         .glassSurface(Capsule())
                         .rotationEffect(orientation.rotation)
                         .position(x: spot.location.x - sin(angle) * distance, y: spot.location.y + cos(angle) * distance)
+                        .allowsHitTesting(false)
+                        .transition(.opacity)
+                }
+                if isSwitchingCamera {
+                    // Like the Camera app changing lenses: blur everything on the image, frame included,
+                    // while the view and the camera settle.
+                    Rectangle()
+                        .fill(.thinMaterial)
                         .allowsHitTesting(false)
                         .transition(.opacity)
                 }
@@ -311,10 +312,19 @@ struct ViewfinderView: View {
         movement.map { $0.layout.isBeyondCamera } ?? (solution?.isClipped == true)
     }
 
+    /// Turning movements on or off happens under the blur, so the frame and camera don't visibly jump.
     private var movementsToggle: Binding<Bool> {
         Binding(get: { movements.isOn }, set: { isOn in
+            coverSwitch()
             withAnimation(.smooth(duration: 0.35)) { movements.isOn = isOn }
         })
+    }
+
+    /// Blurs the image at once; it fades when the switch has settled.
+    private func coverSwitch() {
+        var instant = Transaction()
+        instant.disablesAnimations = true
+        withTransaction(instant) { cameraSwitch = UUID() }
     }
 
     /// Moves one axis, stopping at the image circle and the camera's limits, in half-millimetre steps.
@@ -376,9 +386,7 @@ struct ViewfinderView: View {
                     // Straight to the new zoom, which may be another of the phone's cameras, under a blur
                     // that fades once the picture has settled. Ramping instead shows the camera zooming
                     // and handing over between lenses.
-                    var instant = Transaction()
-                    instant.disablesAnimations = true
-                    withTransaction(instant) { cameraSwitch = UUID() }
+                    coverSwitch()
                 }
                 camera.setZoom(zoom, immediately: isSwitch)
             }
@@ -497,7 +505,8 @@ struct ViewfinderView: View {
                 LensEditorView(item: .new(), isRoot: true)
             }
         case .settings:
-            ExposureSettingsView()
+            // The lens library is reached from Settings; this swaps the sheet (or card) for it.
+            ExposureSettingsView(openLenses: { present(.lenses) })
         }
     }
 
@@ -725,8 +734,9 @@ private struct TurnedWhenSideways: ViewModifier {
 
 // MARK: - Tools
 
-/// Round buttons above the meter, each labelled: settings, frame (format), lenses, movements and grid,
-/// spread across the width. Held sideways the labels hide, as they would read sideways.
+/// The bottom row: labelled round buttons for settings, grid and frame (format), and on the right a
+/// Lenses | Movements switch for the row above: the lens selector, or the movement controls in its place.
+/// Held sideways the labels hide, as they would read sideways.
 private struct ToolRow: View {
     let rotation: Angle
     @Binding var showsGrid: Bool
@@ -741,17 +751,17 @@ private struct ToolRow: View {
         HStack(alignment: .top, spacing: 0) {
             tool("slider.horizontal.3", "Settings", id: "settingsButton") { present(.settings) }
             Spacer(minLength: 4)
+            tool("grid", "Grid", id: "gridButton", isOn: showsGrid) { showsGrid.toggle() }
+            Spacer(minLength: 4)
             tool("aspectratio", "Frame", id: "formatButton",
                  accessibility: "Frame: \(library.selectedFormat.name)") { present(.formats) }
             Spacer(minLength: 4)
-            tool("camera.aperture", "Lenses", id: "lensButton") {
-                present(library.lenses.isEmpty ? .newLens : .lenses)
+            // Words when they fit, icons on a narrow phone.
+            ViewThatFits(in: .horizontal) {
+                ModeSwitch(showsMovements: $showsMovements, rotation: rotation, usesIcons: false)
+                ModeSwitch(showsMovements: $showsMovements, rotation: rotation, usesIcons: true)
             }
-            Spacer(minLength: 4)
-            tool("arrow.up.and.down.and.arrow.left.and.right", "Movements", id: "movementsButton",
-                 isOn: showsMovements) { showsMovements.toggle() }
-            Spacer(minLength: 4)
-            tool("grid", "Grid", id: "gridButton", isOn: showsGrid) { showsGrid.toggle() }
+            .frame(height: RoundGlassButton.size)
         }
         .frame(height: Self.height, alignment: .top)
     }
@@ -771,6 +781,54 @@ private struct ToolRow: View {
                 .opacity(rotation == .zero ? 1 : 0)
                 .accessibilityHidden(true)
         }
+    }
+}
+
+/// Lenses | Movements, as the system segmented control. Held sideways its segments show icons, turned to
+/// read upright (segments can only show text or images).
+private struct ModeSwitch: View {
+    @Binding var showsMovements: Bool
+    let rotation: Angle
+    let usesIcons: Bool
+
+    var body: some View {
+        Picker("Mode", selection: $showsMovements) {
+            segment("Lenses", symbol: "camera.aperture").tag(false)
+            segment("Movements", symbol: "arrow.up.and.down.and.arrow.left.and.right").tag(true)
+        }
+        .pickerStyle(.segmented)
+        .controlSize(.large)
+        .fixedSize()
+        // New segment images replace the old outright; animated, iOS 26 flashes each segment.
+        .transaction(value: rotation) { $0.animation = nil }
+        .accessibilityIdentifier("modeSwitch")
+    }
+
+    @ViewBuilder
+    private func segment(_ title: String, symbol: String) -> some View {
+        if rotation == .zero, !usesIcons {
+            Text(title)
+        } else {
+            Image(uiImage: TurnedSymbol.image(symbol, angle: rotation.radians))
+                .accessibilityLabel(title)
+        }
+    }
+}
+
+/// An SF Symbol drawn turned, as a template image for a segmented control segment.
+private enum TurnedSymbol {
+    static func image(_ name: String, angle: Double) -> UIImage {
+        let configuration = UIImage.SymbolConfiguration(pointSize: 16, weight: .medium)
+        guard let symbol = UIImage(systemName: name, withConfiguration: configuration) else { return UIImage() }
+        let side = ceil(max(symbol.size.width, symbol.size.height))
+        let image = UIGraphicsImageRenderer(size: CGSize(width: side, height: side)).image { context in
+            let cg = context.cgContext
+            cg.translateBy(x: side / 2, y: side / 2)
+            cg.rotate(by: angle)
+            symbol.draw(in: CGRect(x: -symbol.size.width / 2, y: -symbol.size.height / 2,
+                                   width: symbol.size.width, height: symbol.size.height))
+        }
+        return image.withRenderingMode(.alwaysTemplate)
     }
 }
 

@@ -8,10 +8,33 @@ struct ExposureSettingsView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.closePanel) private var closePanel
     @State private var confirmsReset = false
+    /// Opens the lens library in place of Settings.
+    var openLenses: (() -> Void)?
 
     var body: some View {
         NavigationStack {
             Form {
+                if let openLenses {
+                    Section {
+                        Button(action: openLenses) {
+                            HStack {
+                                Label("Lenses", systemImage: "camera.aperture")
+                                Spacer()
+                                Text("\(library.lenses.count)")
+                                    .foregroundStyle(.secondary)
+                                Image(systemName: "chevron.right")
+                                    .font(.footnote.weight(.semibold))
+                                    .foregroundStyle(.tertiary)
+                            }
+                            .contentShape(Rectangle())
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityIdentifier("settingsLenses")
+                    } footer: {
+                        Text("Add, edit and delete lenses and their image circles.")
+                    }
+                }
+
                 Section {
                     Picker("Steps", selection: Binding(get: { library.meterStep }, set: { library.meterStep = $0 })) {
                         Text("Full Stop").tag(3)

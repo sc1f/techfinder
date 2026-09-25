@@ -24,10 +24,8 @@ final class TechFinderUITests: XCTestCase {
         let app = XCUIApplication.fresh()
         app.launch()
 
-        let lensButton = app.buttons["lensButton"]
-        XCTAssertTrue(lensButton.waitForExistence(timeout: 15))
-        lensButton.tap()
-        XCTAssertTrue(app.navigationBars["Lenses"].waitForExistence(timeout: 5))
+        // The lens library opens from Settings.
+        openLensLibrary(app)
         attachScreenshot(of: app, named: "lenses")
         app.buttons["Done"].firstMatch.tap()
 
@@ -285,9 +283,8 @@ final class TechFinderUITests: XCTestCase {
 
             var controls: [(String, XCUIElement)] = [
                 ("grid", app.buttons["gridButton"].firstMatch),
-                ("movements", app.buttons["movementsButton"].firstMatch),
+                ("mode switch", app.segmentedControls["modeSwitch"].firstMatch),
                 ("settings", app.buttons["settingsButton"].firstMatch),
-                ("lenses", app.buttons["lensButton"].firstMatch),
                 ("frame", app.buttons["formatButton"].firstMatch),
             ]
             controls += [("ISO", app.otherElements["meter-iso"].firstMatch),
@@ -351,11 +348,8 @@ final class TechFinderUITests: XCTestCase {
         let app = XCUIApplication.fresh()
         app.launch()
 
-        let lensButton = app.buttons["lensButton"]
-        XCTAssertTrue(lensButton.waitForExistence(timeout: 15))
-
         let thirtyTwo = app.buttons["HR Digaron-S 32"]
-        XCTAssertTrue(thirtyTwo.waitForExistence(timeout: 5))
+        XCTAssertTrue(thirtyTwo.waitForExistence(timeout: 15))
         thirtyTwo.tap()
         XCTAssertTrue(thirtyTwo.isSelected, "Tapping a lens selects it")
 
@@ -394,11 +388,38 @@ final class TechFinderUITests: XCTestCase {
         attachScreenshot(of: app, named: "lens-image-circle")
         app.buttons["Save"].tap()
 
-        let lensButton = app.buttons["lensButton"]
-        XCTAssertTrue(lensButton.waitForExistence(timeout: 5))
-        lensButton.tap()
+        openLensLibrary(app)
         XCTAssertTrue(app.staticTexts.containing(NSPredicate(format: "label CONTAINS 'IC 158 mm'")).firstMatch
             .waitForExistence(timeout: 5), "The library lists the image circle")
+    }
+
+    /// Lenses | Movements switches the row above the buttons between the lens selector and the movement
+    /// controls.
+    func testModeSwitchShowsLensesOrMovements() {
+        let app = XCUIApplication.fresh()
+        app.launchArguments += ["-TFImageCircle", "90"]
+        app.launch()
+        let modeSwitch = app.segmentedControls["modeSwitch"].firstMatch
+        XCTAssertTrue(modeSwitch.waitForExistence(timeout: 15))
+        XCTAssertTrue(app.otherElements["lensSelector"].exists)
+
+        modeSwitch.buttons["Movements"].tap()
+        XCTAssertTrue(app.otherElements["movementDial"].firstMatch.waitForExistence(timeout: 5))
+        XCTAssertFalse(app.otherElements["lensSelector"].exists)
+        attachScreenshot(of: app, named: "mode-movements")
+
+        modeSwitch.buttons["Lenses"].tap()
+        XCTAssertTrue(app.otherElements["lensSelector"].waitForExistence(timeout: 5))
+    }
+
+    private func openLensLibrary(_ app: XCUIApplication) {
+        let settings = app.buttons["settingsButton"]
+        XCTAssertTrue(settings.waitForExistence(timeout: 15))
+        settings.tap()
+        let lenses = app.buttons["settingsLenses"]
+        XCTAssertTrue(lenses.waitForExistence(timeout: 5))
+        lenses.tap()
+        XCTAssertTrue(app.navigationBars["Lenses"].waitForExistence(timeout: 5), "Settings opens the lens library")
     }
 
     /// Taps the keyboard's Done button when the keyboard is showing (it may not be on CI).

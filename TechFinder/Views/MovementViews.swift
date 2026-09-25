@@ -219,6 +219,8 @@ struct MovementBar: View {
     let rotation: Angle
     /// Moves the chosen axis by a number of millimetres, stopping at the limits.
     let step: (Double) -> Void
+    /// Returns the chosen axis to zero.
+    let reset: () -> Void
     /// Returns both axes to zero.
     let resetAll: () -> Void
 
@@ -235,7 +237,7 @@ struct MovementBar: View {
 
             MovementDial(axis: state.axis, value: state.movement[state.axis], caption: caption,
                          captionLevel: captionLevel, rotation: rotation, step: step,
-                         reset: { step(-state.movement[state.axis]) }, resetAll: resetAll)
+                         reset: reset, resetAll: resetAll)
 
             Button {
                 withAnimation(.smooth(duration: 0.35)) { state.showsOverview.toggle() }

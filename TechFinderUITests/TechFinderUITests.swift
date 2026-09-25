@@ -130,13 +130,9 @@ final class TechFinderUITests: XCTestCase {
         let value = dial.value as? String ?? ""
         XCTAssertTrue(value.hasPrefix("+"), "Dragging down should rise, got \(value)")
 
-        // Double-tapping the image returns the current movement to zero, with an offer to undo.
+        // Double-tapping the image returns the current movement to zero.
         window.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.4)).doubleTap()
         XCTAssertEqual(dial.value as? String, "0 mm", "Double-tap resets the rise")
-        let undo = app.buttons["Undo"]
-        XCTAssertTrue(undo.waitForExistence(timeout: 2), "Resetting offers Undo")
-        undo.tap()
-        XCTAssertEqual(dial.value as? String, value, "Undo puts the rise back")
     }
 
     /// Tapping the movement value opens a menu to reset it; the arrows and menu don't move the frame.
@@ -161,6 +157,7 @@ final class TechFinderUITests: XCTestCase {
         dial.tap()
         app.buttons["Reset Rise and Shift"].tap()
         XCTAssertEqual(dial.value as? String, "0 mm")
+
     }
 
     /// Pinching changes the frame size and brings up a chip that puts it back.

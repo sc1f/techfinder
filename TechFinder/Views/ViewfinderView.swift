@@ -23,7 +23,6 @@ struct ViewfinderView: View {
     /// The screen's safe area. Full-screen layers ignore it, so it is read from the screen's own frame.
     @State private var safeArea = EdgeInsets()
     /// A movement a double-tap just returned to zero, which the banner offers to put back.
-    @State private var undoableReset: (axis: MovementAxis, value: Double, id: UUID)?
     /// The lens nickname shown briefly over the image after choosing a lens.
     @State private var lensNotice: (name: String, id: UUID)?
     @AppStorage("hasSeenSpotHint") private var hasSeenSpotHint = false
@@ -216,12 +215,7 @@ struct ViewfinderView: View {
             .accessibilityElement(children: .contain)
             .accessibilityIdentifier("viewfinderImage")
             .onTapGesture(count: 2) {
-                guard let movement else { return }
-                let axis = movements.axis
-                let previous = movements.movement[axis]
-                guard previous != 0 else { return }
-                move(axis, to: 0, info: movement)
-                withAnimation(.smooth(duration: 0.25)) { undoableReset = (axis, previous, UUID()) }
+                if movement != nil { resetMovement(movements.axis) }
             }
             .gesture(imageDrag(movement: movement, mapping: mapping))
             .position(x: imageRect.midX, y: imageRect.midY)
@@ -230,8 +224,7 @@ struct ViewfinderView: View {
             ImageNotices(rotation: orientation.rotation, size: imageRect.size,
                          isTooWide: isTooWide(solution: solution, movement: movement),
                          exposureWarning: exposureWarning,
-                         lensName: lensNotice?.name, undo: undoText,
-                         performUndo: performUndo,
+                         lensName: lensNotice?.name,
                          zoom: abs(fill - Framing.defaultFill) > 0.001 ? fill / Framing.defaultFill : nil,
                          resetZoom: { withAnimation(.smooth) { fill = Framing.defaultFill } })
                 .position(x: imageRect.midX, y: imageRect.midY)
@@ -251,16 +244,9 @@ struct ViewfinderView: View {
         return "\(error < 0 ? "Underexposed" : "Overexposed") \(amount) \(thirds == 3 ? "stop" : "stops")"
     }
 
-    private var undoText: String? {
-        undoableReset.map { "\($0.axis == .rise ? "Rise" : "Shift") reset to 0" }
-    }
-
-    private func performUndo() {
-        let exposure = ExposureSolver.solve(library.exposure, meteredEV100: meteredEV, limits: library.exposureLimits)
-        guard let reset = undoableReset, let movement = movementInfo(exposure: exposure, solution: solution) else { return }
-        movements.axis = reset.axis
-        move(reset.axis, to: reset.value, info: movement)
-        withAnimation(.smooth(duration: 0.2)) { undoableReset = nil }
+    /// Returns one axis, or both, to zero.
+    private func resetMovement(_ axis: MovementAxis?) {
+        if let axis { movements.movement[axis] = 0 } else { movements.movement = .zero }
     }
 
     /// Everything sits below the camera image, within thumb reach, sharing out the band evenly: the meter,
@@ -314,7 +300,8 @@ struct ViewfinderView: View {
                         step: { delta in
                             move(movements.axis, to: movements.movement[movements.axis] + delta, info: movement)
                         },
-                        resetAll: { movements.movement = .zero })
+                        reset: { resetMovement(movements.axis) },
+                        resetAll: { resetMovement(nil) })
             .transition(.opacity)
         }
     }
@@ -358,13 +345,6 @@ struct ViewfinderView: View {
             .animation(Self.turn, value: orientation.hold)
             .statusBarHidden()
             .persistentSystemOverlays(.hidden)
-            .task(id: undoableReset?.id) {
-                // The undo offer lasts a few seconds.
-                guard undoableReset != nil else { return }
-                try? await Task.sleep(for: .seconds(4))
-                guard !Task.isCancelled else { return }
-                withAnimation(.easeOut(duration: 0.3)) { undoableReset = nil }
-            }
             .onChange(of: library.selectedLensID) {
                 // A new lens's nickname, if it has one, shows briefly over the image.
                 let name = library.selectedLens?.name.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
@@ -645,7 +625,7 @@ struct ViewfinderView: View {
 // MARK: - Notices
 
 /// Brief notices at the bottom of the camera image, laid out the way the phone is held: warnings, the lens
-/// nickname, an undo offer, and the frame-size chip, which resets the pinch when tapped.
+/// nickname, and the frame-size chip, which resets the pinch when tapped.
 private struct ImageNotices: View {
     let rotation: Angle
     let size: CGSize
@@ -654,8 +634,6 @@ private struct ImageNotices: View {
     /// Over- or underexposure when the meter is held at the equipment's limits.
     let exposureWarning: String?
     let lensName: String?
-    let undo: String?
-    let performUndo: () -> Void
     /// Frame size relative to the standard fill, when pinched away from it.
     let zoom: Double?
     let resetZoom: () -> Void
@@ -684,21 +662,6 @@ private struct ImageNotices: View {
                     .transition(.opacity.combined(with: .scale(scale: 0.9)))
                     .accessibilityElement(children: .combine)
                     .accessibilityIdentifier("lensNotice")
-            }
-            if let undo {
-                HStack(spacing: 12) {
-                    Text(undo)
-                        .font(.footnote)
-                    Button("Undo", action: performUndo)
-                        .font(.footnote.weight(.semibold))
-                        .foregroundStyle(Color.accentColor)
-                        .frame(minHeight: 44)
-                }
-                .padding(.leading, 14)
-                .padding(.trailing, 6)
-                .glassSurface(Capsule())
-                .transition(.move(edge: .bottom).combined(with: .opacity))
-                .accessibilityIdentifier("undoBanner")
             }
             if let zoom {
                 Button(action: resetZoom) {

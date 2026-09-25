@@ -142,7 +142,8 @@ struct ViewfinderView: View {
         GeometryReader { geometry in
             let imageRect = screenLayout(geometry, solution: solution, movement: movement).image
             let mapping = movement.map {
-                MovementMapping.make(layout: $0.layout, imageSize: imageRect.size, showsOverview: movements.showsOverview)
+                MovementMapping.make(layout: $0.layout, imageSize: imageRect.size, showsOverview: movements.showsOverview,
+                                     framingZoom: solution?.zoom)
             }
             let transform = movement.flatMap { info in
                 mapping.map { $0.imageTransform(layout: info.layout, imageSize: imageRect.size) }
@@ -625,8 +626,8 @@ struct ViewfinderView: View {
 
 // MARK: - Notices
 
-/// Brief notices over the camera image, laid out the way the phone is held: the lens nickname and an
-/// undo offer at the top, and the frame-size chip at the bottom, which resets the pinch when tapped.
+/// Brief notices at the bottom of the camera image, laid out the way the phone is held: warnings, the lens
+/// nickname, an undo offer, and the frame-size chip, which resets the pinch when tapped.
 private struct ImageNotices: View {
     let rotation: Angle
     let size: CGSize
@@ -643,7 +644,9 @@ private struct ImageNotices: View {
 
     var body: some View {
         let isTurned = rotation != .zero
+        // All at the bottom of the image, clear of the frame's subject, above the frame-size chip.
         VStack(spacing: 8) {
+            Spacer(minLength: 0)
             if isTooWide {
                 WarningTag()
                     .transition(.opacity)
@@ -676,10 +679,9 @@ private struct ImageNotices: View {
                 .padding(.leading, 14)
                 .padding(.trailing, 6)
                 .glassSurface(Capsule())
-                .transition(.move(edge: .top).combined(with: .opacity))
+                .transition(.move(edge: .bottom).combined(with: .opacity))
                 .accessibilityIdentifier("undoBanner")
             }
-            Spacer(minLength: 0)
             if let zoom {
                 Button(action: resetZoom) {
                     Text(String(format: "%.1f×", zoom))

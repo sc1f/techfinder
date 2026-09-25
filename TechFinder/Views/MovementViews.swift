@@ -18,9 +18,11 @@ struct MovementMapping: Equatable {
     var originY: Double
 
     /// Overview: the phone image as it is, or smaller when the image circle or the frame reaches past
-    /// what the phone can see, so all of it shows. Result: zoomed and panned so the moved frame is
-    /// centred and fills `fill` of the image.
-    static func make(layout: MovementLayout, imageSize: CGSize, showsOverview: Bool, fill: Double = 0.85) -> MovementMapping {
+    /// what the phone can see, so all of it shows. Result: panned so the moved frame is centred, at the
+    /// scale the frame has without movements (`framingZoom`), so turning movements on doesn't resize it;
+    /// without one, the frame fills `fill` of the image.
+    static func make(layout: MovementLayout, imageSize: CGSize, showsOverview: Bool, framingZoom: Double? = nil,
+                     fill: Double = 0.85) -> MovementMapping {
         let base = Double(imageSize.width) / (2 * layout.imageHalfWidth)
         guard layout.frameHalfWidth > 0, layout.frameHalfHeight > 0 else {
             return MovementMapping(pointsPerTan: base, originX: 0, originY: 0)
@@ -29,6 +31,12 @@ struct MovementMapping: Equatable {
             let reach = 0.96 * min(Double(imageSize.width) / (2 * layout.reachHalfWidth),
                                    Double(imageSize.height) / (2 * layout.reachHalfHeight))
             return MovementMapping(pointsPerTan: min(base, reach), originX: 0, originY: 0)
+        }
+        if let framingZoom {
+            // The camera's scale at the frame's zoom: the frame is drawn the same size as without movements.
+            let tanHalfShort = layout.imageHalfWidth * layout.zoom
+            return MovementMapping(pointsPerTan: Double(imageSize.width) * framingZoom / (2 * tanHalfShort),
+                                   originX: layout.frameCenterX, originY: layout.frameCenterY)
         }
         let scale = fill * min(Double(imageSize.width) / (2 * layout.frameHalfWidth * base),
                                Double(imageSize.height) / (2 * layout.frameHalfHeight * base))
@@ -118,10 +126,10 @@ struct MovementOverlay: View, Animatable {
                 context.fill(outside, with: .color(.black.opacity(0.7)), style: FillStyle(eoFill: true))
             }
 
-            // Inside the circle but outside the moved frame: dimmed like the normal viewfinder.
+            // Inside the circle but outside the moved frame: dimmed as in the normal viewfinder.
             var surround = circlePath ?? bounds
             surround.addRect(frame)
-            context.fill(surround, with: .color(.black.opacity(0.45)), style: FillStyle(eoFill: true))
+            context.fill(surround, with: .color(.black.opacity(0.55)), style: FillStyle(eoFill: true))
 
             if let circlePath {
                 let color: Color = (margin ?? 1) < 0 ? .red : ((margin ?? .infinity) < Self.closeMargin ? .orange : .white.opacity(0.55))
@@ -155,8 +163,14 @@ struct MovementOverlay: View, Animatable {
                 context.stroke(thirds, with: .color(.white.opacity(0.4)), lineWidth: 0.5)
             }
 
-            // The moved frame.
-            context.stroke(Path(frame), with: .color(.white.opacity(0.9)), lineWidth: 1)
+            // The moved frame, drawn as in the normal viewfinder, with its centre mark.
+            context.stroke(Path(frame), with: .color(.white.opacity(0.85)), lineWidth: 1)
+            var centerMark = Path()
+            centerMark.move(to: CGPoint(x: frame.midX - 8, y: frame.midY))
+            centerMark.addLine(to: CGPoint(x: frame.midX + 8, y: frame.midY))
+            centerMark.move(to: CGPoint(x: frame.midX, y: frame.midY - 8))
+            centerMark.addLine(to: CGPoint(x: frame.midX, y: frame.midY + 8))
+            context.stroke(centerMark, with: .color(.white.opacity(0.6)), lineWidth: 1)
             let arm = min(22, min(frame.width, frame.height) * 0.2)
             var corners = Path()
             for (corner, dx, dy) in [(CGPoint(x: frame.minX, y: frame.minY), 1.0, 1.0),

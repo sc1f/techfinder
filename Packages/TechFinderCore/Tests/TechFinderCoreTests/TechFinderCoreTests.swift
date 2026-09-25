@@ -227,6 +227,17 @@ final class ExposureTests: XCTestCase {
         XCTAssertEqual(settings.shutterIndex, ExposureLimits.default.shutter.upperBound)
     }
 
+    /// ISO 64 is common enough to count as a whole stop: 50, 64, 100, 200.
+    func testWholeStopISOsIncludeSixtyFour() {
+        let iso50 = ExposureScale.labels(.iso).firstIndex(of: "50")!
+        let up = { ExposureScale.stepped($0, by: 1, thirdsPerStep: 3, axis: .iso) }
+        XCTAssertEqual(ExposureScale.label(.iso, up(iso50)), "64")
+        XCTAssertEqual(ExposureScale.label(.iso, up(up(iso50))), "100")
+        XCTAssertEqual(ExposureScale.label(.iso, up(up(up(iso50)))), "200")
+        XCTAssertTrue(ExposureScale.isFullStop(ExposureScale.labels(.iso).firstIndex(of: "64")!, axis: .iso))
+        XCTAssertFalse(ExposureScale.isFullStop(ExposureScale.labels(.iso).firstIndex(of: "80")!, axis: .iso))
+    }
+
     func testChangingToWholeStopsSnapsTheLimits() {
         let store = LibraryStore(fileURL: nil)
         store.meterStep = 1
@@ -238,7 +249,7 @@ final class ExposureTests: XCTestCase {
         XCTAssertEqual(ExposureScale.label(.aperture, limits.aperture.upperBound), "f/22")
         XCTAssertEqual(ExposureScale.label(.shutter, limits.shutter.lowerBound), "1/60")
         XCTAssertEqual(ExposureScale.label(.shutter, limits.shutter.upperBound), "1/4")
-        XCTAssertEqual(ExposureScale.label(.iso, limits.iso.lowerBound), "50")
+        XCTAssertEqual(ExposureScale.label(.iso, limits.iso.lowerBound), "64", "ISO 64 is a whole stop")
         XCTAssertEqual(ExposureScale.label(.iso, limits.iso.upperBound), "3200")
         for axis in [ExposureAxis.iso, .aperture, .shutter] {
             XCTAssertTrue(ExposureScale.isFullStop(limits.range(axis).lowerBound, axis: axis))
@@ -255,7 +266,8 @@ final class ExposureTests: XCTestCase {
         XCTAssertEqual(step(.iso, "400", 1), "800")
         XCTAssertEqual(step(.iso, "800", 2), "3200")
         XCTAssertEqual(step(.iso, "64", 1), "100")
-        XCTAssertEqual(step(.iso, "100", -1), "50")
+        XCTAssertEqual(step(.iso, "100", -1), "64", "ISO 64 counts as a whole stop")
+        XCTAssertEqual(step(.iso, "64", -1), "50")
         XCTAssertEqual(step(.aperture, "9", 1), "f/11")
         XCTAssertEqual(step(.aperture, "8", 1), "f/11")
         XCTAssertEqual(step(.aperture, "5.6", -1), "f/4")

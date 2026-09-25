@@ -60,41 +60,45 @@ public enum ExposureScale {
     static func shutterIndex(forSeconds t: Double) -> Double { Double(oneSecond) + 3 * log2(t) }
 
     /// Moves an index by `steps` of `thirdsPerStep`. Full-stop steps land on the standard full-stop series
-    /// (ISO 100, 200, 400…; f/5.6, 8, 11…; 1/125, 1/250…): from an in-between value the first step goes to
-    /// the next full stop in that direction.
+    /// (ISO 50, 64, 100, 200…; f/5.6, 8, 11…; 1/125, 1/250…): from an in-between value the first step goes
+    /// to the next full stop in that direction.
     public static func stepped(_ index: Int, by steps: Int, thirdsPerStep: Int, axis: ExposureAxis) -> Int {
         guard steps != 0 else { return index }
         let range = range(axis)
         guard thirdsPerStep == 3 else {
             return min(max(index + steps * thirdsPerStep, range.lowerBound), range.upperBound)
         }
-        // Full stops sit on every third index from the anchor (ISO 100, f/1, one second).
-        let anchor = axis == .iso ? iso100 : (axis == .shutter ? oneSecond : 0)
-        let offset = ((index - anchor) % 3 + 3) % 3
-        var result: Int
-        if steps > 0 {
-            result = index + (offset == 0 ? 3 : 3 - offset) + 3 * (steps - 1)
-        } else {
-            result = index - (offset == 0 ? 3 : offset) + 3 * (steps + 1)
+        let stops = fullStops(axis)
+        var result = index
+        for _ in 0..<abs(steps) {
+            let next = steps > 0 ? stops.first { $0 > result } : stops.last { $0 < result }
+            guard let next else { break }
+            result = next
         }
-        return min(max(result, range.lowerBound), range.upperBound)
+        return result
+    }
+
+    /// The standard full-stop series on the scale: every third index from ISO 100, f/1 and one second,
+    /// plus ISO 64, which films and backs commonly use.
+    public static func fullStops(_ axis: ExposureAxis) -> [Int] {
+        let anchor = fullStopAnchor(axis)
+        return range(axis).filter { index in
+            (index - anchor) % 3 == 0 || (axis == .iso && index == iso64)
+        }
     }
 
     /// Whether an index is on the standard full-stop series.
     public static func isFullStop(_ index: Int, axis: ExposureAxis) -> Bool {
-        (index - fullStopAnchor(axis)) % 3 == 0
+        fullStops(axis).contains(index)
     }
 
     /// The whole stop nearest `index` on the scale (f/1.1 → f/1, 1/80 → 1/60, ISO 160 → 200).
     public static func nearestFullStop(_ index: Int, axis: ExposureAxis) -> Int {
-        let anchor = fullStopAnchor(axis)
-        let range = range(axis)
-        var nearest = anchor + 3 * Int((Double(index - anchor) / 3).rounded())
-        // Stay on the scale, on a whole stop.
-        while nearest < range.lowerBound { nearest += 3 }
-        while nearest > range.upperBound { nearest -= 3 }
-        return nearest
+        fullStops(axis).min { abs($0 - index) < abs($1 - index) } ?? index
     }
+
+    /// ISO 64: two thirds of a stop below ISO 100.
+    static let iso64 = iso100 - 2
 
     /// Whole stops are counted from ISO 100, f/1 and 1 s.
     private static func fullStopAnchor(_ axis: ExposureAxis) -> Int {

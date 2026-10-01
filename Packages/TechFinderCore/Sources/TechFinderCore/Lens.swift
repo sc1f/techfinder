@@ -8,16 +8,20 @@ public struct Lens: Identifiable, Codable, Hashable, Sendable {
     public var focalLength: Double
     /// Manufacturer image circle figures, e.g. 90 mm at f/11. Empty when unknown.
     public var imageCircle: [ImageCirclePoint]
+    /// Listed in the lens selector under the image; a lens can stay in the library without it.
+    public var showsInSelector: Bool
 
-    public init(id: UUID = UUID(), name: String, focalLength: Double, imageCircle: [ImageCirclePoint] = []) {
+    public init(id: UUID = UUID(), name: String, focalLength: Double, imageCircle: [ImageCirclePoint] = [],
+                showsInSelector: Bool = true) {
         self.id = id
         self.name = name
         self.focalLength = focalLength
         self.imageCircle = imageCircle
+        self.showsInSelector = showsInSelector
     }
 
     private enum CodingKeys: String, CodingKey {
-        case id, name, focalLength, imageCircle
+        case id, name, focalLength, imageCircle, showsInSelector
     }
 
     public init(from decoder: Decoder) throws {
@@ -27,6 +31,7 @@ public struct Lens: Identifiable, Codable, Hashable, Sendable {
         focalLength = try container.decode(Double.self, forKey: .focalLength)
         // Added later; missing in older libraries.
         imageCircle = try container.decodeIfPresent([ImageCirclePoint].self, forKey: .imageCircle) ?? []
+        showsInSelector = try container.decodeIfPresent(Bool.self, forKey: .showsInSelector) ?? true
     }
 
     /// The image circle diameter at an aperture, if the lens has image circle figures.

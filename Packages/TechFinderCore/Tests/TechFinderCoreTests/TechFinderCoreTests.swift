@@ -238,6 +238,23 @@ final class ExposureTests: XCTestCase {
         XCTAssertFalse(ExposureScale.isFullStop(ExposureScale.labels(.iso).firstIndex(of: "80")!, axis: .iso))
     }
 
+    /// Lenses show in the selector unless hidden; a hidden lens in use still shows; older libraries load
+    /// with every lens shown.
+    func testLensesCanBeHiddenFromTheSelector() throws {
+        let store = LibraryStore(fileURL: nil)
+        XCTAssertEqual(store.selectorLenses.count, store.lenses.count)
+        var hidden = try XCTUnwrap(store.lenses.first { $0.id != store.selectedLensID })
+        hidden.showsInSelector = false
+        store.save(hidden)
+        XCTAssertFalse(store.selectorLenses.contains { $0.id == hidden.id })
+        XCTAssertTrue(store.lenses.contains { $0.id == hidden.id }, "Still in the library")
+        store.selectedLensID = hidden.id
+        XCTAssertTrue(store.selectorLenses.contains { $0.id == hidden.id }, "The lens in use shows")
+
+        let old = Data(#"{"id":"\#(UUID().uuidString)","name":"","focalLength":50}"#.utf8)
+        XCTAssertTrue(try JSONDecoder().decode(Lens.self, from: old).showsInSelector)
+    }
+
     func testMeteringModeDefaultsToAverageAndIsSaved() throws {
         let url = FileManager.default.temporaryDirectory.appendingPathComponent("metering-\(UUID()).json")
         defer { try? FileManager.default.removeItem(at: url) }

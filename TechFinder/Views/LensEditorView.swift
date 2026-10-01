@@ -15,6 +15,7 @@ struct LensEditorView: View {
     @State private var name: String
     @State private var focalLengthText: String
     @State private var circleRows: [CircleRow]
+    @State private var showsInSelector: Bool
     @FocusState private var focusedField: Field?
     @State private var confirmsDelete = false
 
@@ -35,6 +36,7 @@ struct LensEditorView: View {
         self.isRoot = isRoot
         _name = State(initialValue: item.lens.name)
         _focalLengthText = State(initialValue: item.isNew ? "" : item.lens.focalLengthLabel)
+        _showsInSelector = State(initialValue: item.lens.showsInSelector)
         _circleRows = State(initialValue: item.lens.imageCircle.map {
             CircleRow(diameterText: Millimetres.label($0.diameter), fNumber: $0.fNumber)
         })
@@ -78,6 +80,10 @@ struct LensEditorView: View {
                     .focused($focusedField, equals: .name)
                     .submitLabel(.done)
                     .onSubmit(save)
+                Toggle("Show in Lens Selector", isOn: $showsInSelector)
+                    .accessibilityIdentifier("showsInSelector")
+            } footer: {
+                Text("Turn off to keep a lens in your library without listing it under the image.")
             }
 
             if let focalLength {
@@ -135,6 +141,7 @@ struct LensEditorView: View {
         lens.name = name.trimmingCharacters(in: .whitespacesAndNewlines)
         lens.focalLength = focalLength
         lens.imageCircle = imageCircle
+        lens.showsInSelector = showsInSelector
         library.save(lens)
         if item.isNew {
             library.selectedLensID = lens.id

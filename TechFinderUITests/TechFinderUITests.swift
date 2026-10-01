@@ -441,6 +441,28 @@ final class TechFinderUITests: XCTestCase {
         XCTAssertTrue(app.otherElements["meter-iso"].firstMatch.waitForExistence(timeout: 5))
     }
 
+    /// A lens can stay in the library but leave the selector under the image.
+    func testLensCanBeHiddenFromTheSelector() {
+        let app = XCUIApplication.fresh()
+        app.launch()
+        XCTAssertTrue(app.buttons["HR Digaron-S 70"].waitForExistence(timeout: 15))
+
+        openLensLibrary(app)
+        app.buttons["Edit HR Digaron-S 70"].tap()
+        let toggle = app.switches["showsInSelector"].firstMatch
+        XCTAssertTrue(toggle.waitForExistence(timeout: 5))
+        XCTAssertEqual(toggle.value as? String, "1", "New and existing lenses show by default")
+        toggle.switches.firstMatch.tap()
+        app.buttons["Save"].tap()
+        attachScreenshot(of: app, named: "hidden-lens-library")
+        app.buttons["Done"].firstMatch.tap()
+
+        let selector = app.otherElements["lensSelector"].firstMatch
+        XCTAssertTrue(selector.waitForExistence(timeout: 5))
+        XCTAssertFalse(selector.buttons["HR Digaron-S 70"].exists, "Hidden from the selector")
+        XCTAssertTrue(selector.buttons["HR Digaron-S 50"].exists)
+    }
+
     private func openLensLibrary(_ app: XCUIApplication) {
         let settings = app.buttons["settingsButton"]
         XCTAssertTrue(settings.waitForExistence(timeout: 15))

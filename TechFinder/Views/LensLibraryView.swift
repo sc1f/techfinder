@@ -86,7 +86,15 @@ struct LensLibraryView: View {
                         .font(.title3.weight(.semibold).monospacedDigit())
                         .frame(minWidth: 44, alignment: .trailing)
                     VStack(alignment: .leading, spacing: 2) {
-                        Text(lens.displayName)
+                        HStack(spacing: 6) {
+                            Text(lens.displayName)
+                            if !lens.showsInSelector {
+                                Image(systemName: "eye.slash")
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                                    .accessibilityLabel("Not in the lens selector")
+                            }
+                        }
                         Text([fov.anglesLabel, fov.equivalentLabel, imageCircleLabel(lens)].compactMap { $0 }.joined(separator: " · "))
                             .font(.caption.monospacedDigit())
                             .foregroundStyle(.secondary)

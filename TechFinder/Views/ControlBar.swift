@@ -103,7 +103,7 @@ private struct NativeLensPicker: View {
     var body: some View {
         let angle = labelAngle ?? rotation.radians
         Picker("Lens", selection: selection) {
-            ForEach(library.lenses) { lens in
+            ForEach(library.selectorLenses) { lens in
                 Image(uiImage: LensLabel.image(lens.focalLengthLabel, showsUnit: showsUnit, angle: angle))
                     .accessibilityLabel(lens.displayName)
                     .tag(Optional(lens.id))
@@ -218,7 +218,7 @@ private struct LensCarousel: View {
     /// Each lens's centre and width along the row, starting at 0.
     private var slots: [(id: Lens.ID, center: CGFloat, width: CGFloat)] {
         var x: CGFloat = 0
-        return library.lenses.map { lens in
+        return library.selectorLenses.map { lens in
             let width = widths[lens.id] ?? minItemWidth
             defer { x += width + spacing }
             return (lens.id, x + width / 2, width)
@@ -314,7 +314,7 @@ private struct LensCarousel: View {
     private func items(magnifierX: CGFloat?) -> some View {
         let centers = Dictionary(uniqueKeysWithValues: slots.map { ($0.id, $0.center) })
         return HStack(spacing: spacing) {
-            ForEach(library.lenses) { lens in
+            ForEach(library.selectorLenses) { lens in
                 item(for: lens, magnification: magnification(at: centers[lens.id], lens: magnifierX))
                     .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { width in
                         widths[lens.id] = width
@@ -434,8 +434,9 @@ private struct LensCarousel: View {
     }
 
     private func step(_ delta: Int) {
-        guard let index = library.lenses.firstIndex(where: { $0.id == library.selectedLensID }) else { return }
-        let next = min(max(index + delta, 0), library.lenses.count - 1)
-        withAnimation(settle) { library.selectedLensID = library.lenses[next].id }
+        let lenses = library.selectorLenses
+        guard let index = lenses.firstIndex(where: { $0.id == library.selectedLensID }) else { return }
+        let next = min(max(index + delta, 0), lenses.count - 1)
+        withAnimation(settle) { library.selectedLensID = lenses[next].id }
     }
 }

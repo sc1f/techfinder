@@ -71,6 +71,12 @@ public final class LibraryStore {
         lenses.first { $0.id == selectedLensID }
     }
 
+    /// The lenses the selector lists: those shown in it, plus the lens in use even if hidden, so the
+    /// selector always shows what's on the camera.
+    public var selectorLenses: [Lens] {
+        lenses.filter { $0.showsInSelector || $0.id == selectedLensID }
+    }
+
     public var allFormats: [CaptureFormat] {
         FormatCatalog.presets + customFormats
     }

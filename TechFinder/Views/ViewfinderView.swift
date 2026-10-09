@@ -222,6 +222,9 @@ struct ViewfinderView: View {
 
             // Over the image but outside its gestures, so the buttons are hit and reported where they are.
             ImageNotices(rotation: orientation.rotation, size: imageRect.size,
+                         // Held sideways, the movement controls run along the viewer's bottom edge of the
+                         // image; the notices sit above them.
+                         bottomInset: orientation.isLandscape && movement != nil ? Self.sideBlockInset + GlassButtonMetrics.pillHeight : 0,
                          isTooWide: isTooWide(solution: solution, movement: movement),
                          exposureWarning: exposureWarning,
                          lensName: lensNotice?.name,
@@ -496,18 +499,22 @@ struct ViewfinderView: View {
     private func sideBlocks(solution: FramingSolution?, exposure: ExposureSolution, movement: MovementInfo?) -> some View {
         if orientation.isLandscape {
             GeometryReader { geometry in
-                // Distance from the screen edge to the centre of the turned block.
-                let inset = 12 + GlassButtonMetrics.pillHeight / 2
+                // Along the viewer's bottom edge of the image, centred on the image.
+                let image = screenLayout(geometry, solution: solution, movement: movement).image
+                let inset = Self.sideBlockInset + GlassButtonMetrics.pillHeight / 2
                 let turnedLeft = orientation.hold == .landscapeLeft
                 setupBlock(solution: solution, movement: movement)
                     .fixedSize()
                     .rotationEffect(orientation.rotation)
-                    .position(x: turnedLeft ? inset : geometry.size.width - inset, y: geometry.size.height / 2)
+                    .position(x: turnedLeft ? image.minX + inset : image.maxX - inset, y: image.midY)
             }
             .ignoresSafeArea()
             .transition(.opacity)
         }
     }
+
+    /// How far the sideways movement controls sit in from the image's edge.
+    static let sideBlockInset: CGFloat = 12
 
     // MARK: - Camera image
 
@@ -629,6 +636,8 @@ struct ViewfinderView: View {
 private struct ImageNotices: View {
     let rotation: Angle
     let size: CGSize
+    /// Extra room kept clear at the viewer's bottom edge, for controls that sit there.
+    let bottomInset: CGFloat
     /// Shows "Wider than the iPhone can see".
     let isTooWide: Bool
     /// Over- or underexposure when the meter is held at the equipment's limits.
@@ -681,6 +690,7 @@ private struct ImageNotices: View {
             }
         }
         .padding(12)
+        .padding(.bottom, bottomInset)
         .frame(width: isTurned ? size.height : size.width, height: isTurned ? size.width : size.height)
         // Turned only when the phone is: accessibility frames don't follow a rotation, even of 0°, so
         // VoiceOver (and taps by accessibility) would miss the buttons.

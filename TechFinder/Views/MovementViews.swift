@@ -316,9 +316,16 @@ struct MovementDial: View {
             .contentShape(Rectangle())
             .onTapGesture { showsMenu = true }
             .popover(isPresented: $showsMenu) {
+                // The menu opens in screen space, so it turns on its own to read upright, and its box
+                // turns with it.
+                let isTurned = rotation != .zero
                 resetMenu
+                    .frame(width: Self.menuSize.width, height: Self.menuSize.height)
                     .rotationEffect(rotation)
+                    .frame(width: isTurned ? Self.menuSize.height : Self.menuSize.width,
+                           height: isTurned ? Self.menuSize.width : Self.menuSize.height)
                     .presentationCompactAdaptation(.popover)
+                    .presentationBackground(.thickMaterial)
             }
 
             arrow("chevron.right") { step(increment) }
@@ -338,13 +345,15 @@ struct MovementDial: View {
         .accessibilityIdentifier("movementDial")
     }
 
+    /// Two 44 pt rows and a divider.
+    static let menuSize = CGSize(width: 240, height: 89)
+
     private var resetMenu: some View {
         VStack(spacing: 0) {
             menuButton("Reset \(axis == .rise ? "Rise" : "Shift") to 0") { reset() }
             Divider()
             menuButton("Reset Rise and Shift") { resetAll() }
         }
-        .frame(width: 240)
         .accessibilityIdentifier("movementMenu")
     }
 

@@ -166,6 +166,8 @@ private struct MeterDial: View {
                 .frame(width: isTurned ? ChoiceList.size.height : ChoiceList.size.width,
                        height: isTurned ? ChoiceList.size.width : ChoiceList.size.height)
                 .presentationCompactAdaptation(.popover)
+                // Readable over a bright scene or the controls behind it.
+                .presentationBackground(.thickMaterial)
             }
     }
 

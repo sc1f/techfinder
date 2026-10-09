@@ -160,6 +160,26 @@ final class TechFinderUITests: XCTestCase {
 
     }
 
+    /// Held sideways, the movement value's reset menu opens turned to read upright, with nothing cut off.
+    func testLandscapeMovementMenuReadsUpright() {
+        let app = XCUIApplication.fresh()
+        app.launchArguments += ["-TFSimulateHold", "landscapeLeft", "-TFImageCircle", "90", "-TFMovements", "YES",
+                                "-TFRise", "6", "-TFShift", "0", "-TFOverview", "NO"]
+        app.launch()
+        let image = app.otherElements["viewfinderImage"].firstMatch
+        XCTAssertTrue(image.waitForExistence(timeout: 15))
+        // The turned movement controls run along the screen's left edge, centred on the image, with the
+        // value in the middle; accessibility frames don't follow the turn, so tap where it is drawn.
+        let window = app.windows.firstMatch
+        let dial = CGPoint(x: image.frame.minX + 12 + 24, y: image.frame.midY)
+        window.coordinate(withNormalizedOffset: .zero).withOffset(CGVector(dx: dial.x, dy: dial.y)).tap()
+        let resetRise = app.buttons["Reset Rise to 0"]
+        XCTAssertTrue(resetRise.waitForExistence(timeout: 5), "Tapping the value opens the reset menu")
+        attachScreenshot(of: app, named: "landscape-movement-menu")
+        resetRise.tap()
+        XCTAssertEqual(app.otherElements["movementDial"].firstMatch.value as? String, "0 mm")
+    }
+
     /// Pinching changes the frame size and brings up a chip that puts it back.
     func testPinchShowsAFrameSizeChip() {
         let app = XCUIApplication.fresh()

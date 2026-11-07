@@ -781,8 +781,12 @@ private struct ModeSwitch: View {
         .pickerStyle(.segmented)
         .controlSize(.large)
         .fixedSize()
-        // New segment images replace the old outright; animated, iOS 26 flashes each segment.
-        .transaction(value: rotation) { $0.animation = nil }
+        // Updates replace segment images outright; animated, iOS 26 cross-fades each segment through a
+        // lighter block. The control animates its own highlight when tapped.
+        .transaction { transaction in
+            transaction.animation = nil
+            transaction.disablesAnimations = true
+        }
         .accessibilityIdentifier("modeSwitch")
     }
 
@@ -794,10 +798,21 @@ private struct ModeSwitch: View {
 
 /// A segment label as a template image of a fixed size for its title: the title upright, or the symbol
 /// turned by `angle` and centred in the same space.
+@MainActor
 enum SegmentLabel {
     private static let font = UIFont.systemFont(ofSize: 15, weight: .semibold)
+    /// Drawn once per label and angle: handing the control the same image again is no change to it.
+    private static var cache: [String: UIImage] = [:]
 
     static func image(title: String, symbol: String, angle: Double) -> UIImage {
+        let key = "\(title) \(angle)"
+        if let cached = cache[key] { return cached }
+        let image = draw(title: title, symbol: symbol, angle: angle)
+        cache[key] = image
+        return image
+    }
+
+    private static func draw(title: String, symbol: String, angle: Double) -> UIImage {
         let text = NSAttributedString(string: title, attributes: [.font: font, .foregroundColor: UIColor.black])
         let textSize = text.size()
         let size = CGSize(width: ceil(textSize.width), height: ceil(max(textSize.height, 22)))

@@ -223,9 +223,13 @@ struct MovementBar: View {
     let reset: () -> Void
     /// Returns both axes to zero.
     let resetAll: () -> Void
+    /// Laid over the camera image (held sideways): the controls spread out along the width they're
+    /// given, and each has a dark backing so the scene doesn't show through.
+    var isOverImage = false
 
     var body: some View {
-        HStack(spacing: 8) {
+        HStack(spacing: isOverImage ? 0 : 8) {
+            // The whole bar turns when the phone is held sideways, so the words always read upright.
             Picker("Axis", selection: $state.axis) {
                 Text("Rise").tag(MovementAxis.rise)
                 Text("Shift").tag(MovementAxis.shift)
@@ -233,11 +237,17 @@ struct MovementBar: View {
             .pickerStyle(.segmented)
             .controlSize(.large)
             .fixedSize()
+            .modifier(DarkBacking(isOn: isOverImage))
             .accessibilityIdentifier("axisPicker")
+
+            if isOverImage { Spacer(minLength: 8) }
 
             MovementDial(axis: state.axis, value: state.movement[state.axis], caption: caption,
                          captionLevel: captionLevel, rotation: rotation, step: step,
-                         reset: reset, resetAll: resetAll)
+                         reset: reset, resetAll: resetAll, fixedWidth: isOverImage ? 220 : nil)
+                .modifier(DarkBacking(isOn: isOverImage))
+
+            if isOverImage { Spacer(minLength: 8) }
 
             Button {
                 withAnimation(.smooth(duration: 0.35)) { state.showsOverview.toggle() }
@@ -249,6 +259,7 @@ struct MovementBar: View {
                     .frame(width: 24, height: GlassButtonMetrics.pillLabelHeight)
             }
             .glassButtonStyle(Capsule())
+            .modifier(DarkBacking(isOn: isOverImage))
             .accessibilityLabel("Image Circle Overview")
             .accessibilityAddTraits(state.showsOverview ? .isSelected : [])
             .accessibilityIdentifier("overviewButton")
@@ -270,6 +281,17 @@ struct MovementBar: View {
     }
 }
 
+/// A dark capsule behind a glass control laid over the camera image, so it reads as solid.
+private struct DarkBacking: ViewModifier {
+    let isOn: Bool
+
+    func body(content: Content) -> some View {
+        content.background {
+            if isOn { Capsule().fill(.black.opacity(0.6)) }
+        }
+    }
+}
+
 /// The chosen axis's movement with step arrows; swipe along it to move further. Tapping it opens a menu
 /// to return it, or both axes, to zero.
 struct MovementDial: View {
@@ -283,6 +305,8 @@ struct MovementDial: View {
     let step: (Double) -> Void
     let reset: () -> Void
     let resetAll: () -> Void
+    /// A set width, instead of taking what the row leaves.
+    var fixedWidth: CGFloat?
 
     @State private var swipeSteps = 0
     @State private var showsMenu = false
@@ -332,6 +356,7 @@ struct MovementDial: View {
         }
         .gesture(swipe)
         .frame(minWidth: 120)
+        .frame(width: fixedWidth)
         .frame(height: GlassButtonMetrics.pillHeight)
         .glassSurface(Capsule(), interactive: true)
         .animation(.smooth(duration: 0.15), value: value)

@@ -293,9 +293,9 @@ struct ViewfinderView: View {
     /// The least space between rows of controls; any more room is shared out evenly.
     static let rowSpacing: CGFloat = 10
 
-    /// The movement controls, when movements are on.
+    /// The movement controls, when movements are on; `isOverImage` when they lie over the image sideways.
     @ViewBuilder
-    private func setupBlock(solution: FramingSolution?, movement: MovementInfo?) -> some View {
+    private func setupBlock(solution: FramingSolution?, movement: MovementInfo?, isOverImage: Bool = false) -> some View {
         if let movement {
             MovementBar(state: $movements, margin: movement.margin,
                         imageCircle: movement.imageCircle.map { ($0.diameter, movement.aperture, $0.isEstimate) },
@@ -304,7 +304,8 @@ struct ViewfinderView: View {
                             move(movements.axis, to: movements.movement[movements.axis] + delta, info: movement)
                         },
                         reset: { resetMovement(movements.axis) },
-                        resetAll: { resetMovement(nil) })
+                        resetAll: { resetMovement(nil) },
+                        isOverImage: isOverImage)
             .transition(.opacity)
         }
     }
@@ -503,8 +504,10 @@ struct ViewfinderView: View {
                 let image = screenLayout(geometry, solution: solution, movement: movement).image
                 let inset = Self.sideBlockInset + GlassButtonMetrics.pillHeight / 2
                 let turnedLeft = orientation.hold == .landscapeLeft
-                setupBlock(solution: solution, movement: movement)
-                    .fixedSize()
+                // As long as the image's edge, less a margin at each end, with the controls spread along it.
+                setupBlock(solution: solution, movement: movement, isOverImage: true)
+                    .frame(width: max(image.height - 2 * Self.sideBlockInset, 0))
+                    .fixedSize(horizontal: false, vertical: true)
                     .rotationEffect(orientation.rotation)
                     .position(x: turnedLeft ? image.minX + inset : image.maxX - inset, y: image.midY)
             }
@@ -717,7 +720,8 @@ private struct TurnedWhenSideways: ViewModifier {
 // MARK: - Tools
 
 /// The bottom row: labelled round buttons for settings, grid and frame (format), and on the right a
-/// Lenses | Movements switch for the row above: the lens selector, or the movement controls in its place.
+/// Lenses | Movements glass switch for the row above: the lens selector, or the movement controls in its
+/// place.
 /// Held sideways the labels hide, as they would read sideways.
 private struct ToolRow: View {
     let rotation: Angle
@@ -738,12 +742,8 @@ private struct ToolRow: View {
             tool("aspectratio", "Frame", id: "formatButton",
                  accessibility: "Frame: \(library.selectedFormat.name)") { present(.formats) }
             Spacer(minLength: 4)
-            // Words when they fit, icons on a narrow phone.
-            ViewThatFits(in: .horizontal) {
-                ModeSwitch(showsMovements: $showsMovements, rotation: rotation, usesIcons: false)
-                ModeSwitch(showsMovements: $showsMovements, rotation: rotation, usesIcons: true)
-            }
-            .frame(height: RoundGlassButton.size)
+            ModeSwitch(showsMovements: $showsMovements, rotation: rotation)
+                .frame(height: RoundGlassButton.size)
         }
         .frame(height: Self.height, alignment: .top)
     }
@@ -766,12 +766,12 @@ private struct ToolRow: View {
     }
 }
 
-/// Lenses | Movements, as the system segmented control. Held sideways its segments show icons, turned to
-/// read upright (segments can only show text or images).
+/// Lenses | Movements, as the system segmented control. Its labels are drawn into images of one fixed
+/// size: the words upright, the turned icon centred in the same space when the phone is held sideways.
+/// So the control is the same size in every state, and turning only swaps images, without animation.
 private struct ModeSwitch: View {
     @Binding var showsMovements: Bool
     let rotation: Angle
-    let usesIcons: Bool
 
     var body: some View {
         Picker("Mode", selection: $showsMovements) {
@@ -786,29 +786,32 @@ private struct ModeSwitch: View {
         .accessibilityIdentifier("modeSwitch")
     }
 
-    @ViewBuilder
     private func segment(_ title: String, symbol: String) -> some View {
-        if rotation == .zero, !usesIcons {
-            Text(title)
-        } else {
-            Image(uiImage: TurnedSymbol.image(symbol, angle: rotation.radians))
-                .accessibilityLabel(title)
-        }
+        Image(uiImage: SegmentLabel.image(title: title, symbol: symbol, angle: rotation.radians))
+            .accessibilityLabel(title)
     }
 }
 
-/// An SF Symbol drawn turned, as a template image for a segmented control segment.
-private enum TurnedSymbol {
-    static func image(_ name: String, angle: Double) -> UIImage {
-        let configuration = UIImage.SymbolConfiguration(pointSize: 16, weight: .medium)
-        guard let symbol = UIImage(systemName: name, withConfiguration: configuration) else { return UIImage() }
-        let side = ceil(max(symbol.size.width, symbol.size.height))
-        let image = UIGraphicsImageRenderer(size: CGSize(width: side, height: side)).image { context in
-            let cg = context.cgContext
-            cg.translateBy(x: side / 2, y: side / 2)
-            cg.rotate(by: angle)
-            symbol.draw(in: CGRect(x: -symbol.size.width / 2, y: -symbol.size.height / 2,
-                                   width: symbol.size.width, height: symbol.size.height))
+/// A segment label as a template image of a fixed size for its title: the title upright, or the symbol
+/// turned by `angle` and centred in the same space.
+enum SegmentLabel {
+    private static let font = UIFont.systemFont(ofSize: 15, weight: .semibold)
+
+    static func image(title: String, symbol: String, angle: Double) -> UIImage {
+        let text = NSAttributedString(string: title, attributes: [.font: font, .foregroundColor: UIColor.black])
+        let textSize = text.size()
+        let size = CGSize(width: ceil(textSize.width), height: ceil(max(textSize.height, 22)))
+        let image = UIGraphicsImageRenderer(size: size).image { context in
+            if angle == 0 {
+                text.draw(at: CGPoint(x: (size.width - textSize.width) / 2, y: (size.height - textSize.height) / 2))
+            } else if let icon = UIImage(systemName: symbol,
+                                         withConfiguration: UIImage.SymbolConfiguration(pointSize: 16, weight: .medium)) {
+                let cg = context.cgContext
+                cg.translateBy(x: size.width / 2, y: size.height / 2)
+                cg.rotate(by: angle)
+                icon.draw(in: CGRect(x: -icon.size.width / 2, y: -icon.size.height / 2,
+                                     width: icon.size.width, height: icon.size.height))
+            }
         }
         return image.withRenderingMode(.alwaysTemplate)
     }
